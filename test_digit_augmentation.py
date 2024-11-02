@@ -4,7 +4,6 @@ import os
 import random
 
 def test_digit_augmentation():
-    # 配置参数（使用相同的config）
     # 配置参数
     config = {
         "canvas_size": 256,          # 输出图像的尺寸大小，生成 canvas_size x canvas_size 的正方形图像

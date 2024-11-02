@@ -35,7 +35,10 @@ class ImageAugmentor:
         distortion_range: Tuple[float, float] = (0.8, 1.2),  # 新增：变形范围
         brightness_range: Tuple[float, float] = (0.7, 1.3),  # 新增：亮度调节范围
         noise_patterns: List[str] = None,
-        noise_pattern_weights: Dict[str, float] = None
+        noise_pattern_weights: Dict[str, float] = None,
+        annotate_letters: bool = False,  # 新增：是否为字母生成YOLO标注
+        letter_count: int = 999  # 字母出现次数限制
+        
     ):
         self.canvas_size = canvas_size
         self.background_noise_type = background_noise_type
@@ -59,7 +62,6 @@ class ImageAugmentor:
         self.occlusion_prob = occlusion_prob
         self.distortion_range = distortion_range
         self.brightness_range = brightness_range
-        
         # 更新噪声图案参数
         self.noise_patterns = noise_patterns or [
             'circle', 'vertical_stripe', 'horizontal_stripe', 
@@ -73,7 +75,10 @@ class ImageAugmentor:
             'hexagon': 0.1,
             'triangle': 0.1
         }
-
+        self.annotate_letters = annotate_letters
+        self.letter_count = letter_count
+        self.total_letters = 0  # 用于跟踪字母总数
+        
         if use_real_background:
             self.real_background_files = [
                 f for f in os.listdir(real_background_dir) 
@@ -309,7 +314,7 @@ class ImageAugmentor:
                 
                 # 创建新的白色背景图像
                 new_img = Image.new('L', (w, h), 255)
-                # 计算粘���位置使图像���中
+                # 计算粘贴位置使图像居中
                 paste_x = (w - new_w) // 2
                 paste_y = (h - new_h) // 2
                 new_img.paste(img, (paste_x, paste_y))
@@ -537,7 +542,7 @@ class ImageAugmentor:
         return np.array(img)
 
     def generate_image(self, input_dir: str) -> Tuple[np.ndarray, List[Tuple]]:
-        """生成一张包含多个数字和噪声图案的增强图像"""
+        """生成一张包含多个数字、字母和噪声图案的增强图像"""
         # 创建空白画布
         canvas = np.full((self.canvas_size, self.canvas_size), 255, dtype=np.uint8)
         
@@ -548,21 +553,52 @@ class ImageAugmentor:
         # 准备所有需要放置的项目
         placement_items = []  # [(type, img, digit, size), ...]
         
-        # 准备数字
+        # 获取所有可用的字符文件夹
+        char_folders = os.listdir(input_dir)
+        
+        # 重置字母计数
+        self.total_letters = 0
+        
+        # 准备数字和字母
         for _ in range(num_digits):
-            digit = random.randint(0, 9)
-            digit_dir = os.path.join(input_dir, str(digit))
-            digit_files = os.listdir(digit_dir)
-            digit_file = random.choice(digit_files)
-            digit_path = os.path.join(digit_dir, digit_file)
+            # 随机选择一个字符文件夹
+            folder = random.choice(char_folders)
+            folder_path = os.path.join(input_dir, folder)
             
-            # 加载和调整数字大小
-            digit_img = self._load_digit(digit_path)
-            digit_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
-            digit_img = self._resize_digit(digit_img, digit_size)
-            digit_img = self._apply_augmentations(digit_img)
+            if not os.path.isdir(folder_path):
+                continue
+                
+            # 确定字符类型和标识
+            if folder.isdigit():  # 数字文件夹
+                char_type = 'digit'
+                char_id = int(folder)
+            elif (folder.startswith('upper_') or folder.startswith('lower_')):  # 字母
+                if self.total_letters >= self.letter_count:  # 如果已经有2个字母，跳过
+                    continue
+                
+                if folder.startswith('upper_'):
+                    char_type = 'upper'
+                    char_id = ord(folder[6:]) - ord('A') + 10
+                else:  # lower_
+                    char_type = 'lower'
+                    char_id = ord(folder[6:]) - ord('a') + 36
+                    
+                self.total_letters += 1
+            else:
+                continue
             
-            placement_items.append(('digit', digit_img, digit, digit_size))
+            # 随机选择字符图像
+            char_files = os.listdir(folder_path)
+            char_file = random.choice(char_files)
+            char_path = os.path.join(folder_path, char_file)
+            
+            # 加载和调整字符大小
+            char_img = self._load_digit(char_path)  # 复用数字加载函数
+            char_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
+            char_img = self._resize_digit(char_img, char_size)  # 复用数字缩放函数
+            char_img = self._apply_augmentations(char_img)
+            
+            placement_items.append((char_type, char_img, char_id, char_size))
         
         # 准备噪声图案
         for _ in range(num_noise_patterns):
@@ -580,7 +616,7 @@ class ImageAugmentor:
         yolo_annotations = []
         
         # 放置所有项目
-        for item_type, img, digit, size in placement_items:
+        for item_type, img, char_id, size in placement_items:
             try:
                 x, y = self._find_valid_position(canvas, img, occupied_positions)
                 # 只复制非白色像素
@@ -588,15 +624,14 @@ class ImageAugmentor:
                 canvas[y:y+size, x:x+size][mask] = img[mask]
                 occupied_positions.append((x, y, img))
                 
-                # 只为数字生成YOLO标注
-                if item_type == 'digit':
-                    # 计算YOLO格式的标注
+                # 生成YOLO标注
+                if item_type == 'digit' or (self.annotate_letters and item_type in ['upper', 'lower']):
                     center_x = (x + size/2) / self.canvas_size
                     center_y = (y + size/2) / self.canvas_size
                     width = size / self.canvas_size
                     height = size / self.canvas_size
                     
-                    yolo_annotations.append((digit, center_x, center_y, width, height))
+                    yolo_annotations.append((char_id, center_x, center_y, width, height))
                 
             except ValueError:
                 continue  # 如果找不到有效位置，跳过当前项目
@@ -709,6 +744,8 @@ if __name__ == "__main__":
             'hexagon': 0.1,              # 六边形的生成概率
             'triangle': 0.1              # 三角形的生成概率
         },
+        "annotate_letters": True,    # 是否为字母生成YOLO标注
+        "letter_count": 2  # 单张图片字母出现总数  
     }
     
     augmentor = ImageAugmentor(**config)
@@ -717,6 +754,6 @@ if __name__ == "__main__":
     generate_dataset(
         input_dir="font_numbers",
         output_dir="augmented_dataset",
-        num_images=200,
+        num_images=500,
         augmentor=augmentor
     )

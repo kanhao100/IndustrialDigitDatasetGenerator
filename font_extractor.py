@@ -1,6 +1,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageChops
 import sys
+from typing import List, Tuple
 
 # 全局常量定义
 IMAGE_SIZE = (64, 64)  # 输出图像大小
@@ -23,41 +24,94 @@ def trim_image(image):
         return image.crop(bbox)
     return image
 
-def extract_numbers_from_ttf(ttf_path, output_base_dir):
-    """提取单个字体文件中的数字"""
+def extract_chars_from_ttf(ttf_path: str, 
+                         output_base_dir: str,
+                         chars_to_extract: List[str] = None,
+                         font_size: int = 48,
+                         image_size: Tuple[int, int] = (64, 64),
+                         text_color: Tuple[int, int, int] = (0, 0, 0)) -> bool:
+    """从TTF文件中提取指定字符
+    Args:
+        ttf_path: TTF字体文件路径
+        output_base_dir: 输出目录基础路径
+        chars_to_extract: 要提取的字符列表，默认为数字0-9
+        font_size: 字体大小，默认48
+        image_size: 输出图像尺寸，默认(64, 64)
+        text_color: 文字颜色，默认黑色(0, 0, 0)
+    Returns:
+        bool: 是否成功提取
+    """
+    # 默认提取数字0-9
+    if chars_to_extract is None:
+        chars_to_extract = [str(i) for i in range(10)]
+    
+    # 创建所有需要的子文件夹
+    for char in chars_to_extract:
+        # 对于字母，使用"upper_X"和"lower_x"格式的文件夹
+        if char.isalpha():
+            if char.isupper():
+                folder_name = f"upper_{char}"
+            else:
+                folder_name = f"lower_{char}"
+        else:
+            folder_name = char
+        # 1. Windows：默认情况下，Windows文件系统（如NTFS）是不区分大小写的。这意味着在Windows上，"A"和"a"会被视为相同的文件夹名称。
+        # 2. macOS：默认情况下，macOS的HFS+文件系统也是不区分大小写的，但可以配置为区分大小写。
+        # 3. Linux：大多数Linux文件系统（如ext4）是区分大小写的。因此，在Linux上，"A"和"a"会被视为不同的文件夹。
+        char_dir = os.path.join(output_base_dir, folder_name)
+        os.makedirs(char_dir, exist_ok=True)
+
     # 获取字体文件名(不含扩展名)
     font_name = os.path.splitext(os.path.basename(ttf_path))[0]
     
     try:
-        # 使用PIL创建数字图像
-        font = ImageFont.truetype(ttf_path, 48)
+        # 使用PIL创建字符图像
+        font = ImageFont.truetype(ttf_path, font_size)
         
-        for digit in range(10):
-            # 创建新（使用RGBA模式支持透明背景）
-            img = Image.new('RGBA', IMAGE_SIZE, (255, 255, 255, 0))
+        for char in chars_to_extract:
+            # 创建新图像（使用RGBA模式支持透明背景）
+            img = Image.new('RGBA', image_size, (255, 255, 255, 0))
             draw = ImageDraw.Draw(img)
             
-            # 取文字大小
-            text = str(digit)
-            bbox = draw.textbbox((0, 0), text, font=font)
+            # 获取字体的完整度量信息
+            ascent, descent = font.getmetrics()
+            total_height = ascent + descent
+            
+            # 获取文字大小
+            bbox = draw.textbbox((0, 0), char, font=font)
             text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
             
             # 计算居中位置
-            x = (IMAGE_SIZE[0] - text_width) // 2
-            y = (IMAGE_SIZE[1] - text_height) // 2
+            x = (image_size[0] - text_width) // 2
+            # 考虑字体的上升和下降部分来计算垂直居中位置
+            y = (image_size[1] - total_height) // 2
             
-            # 绘制文字
-            draw.text((x, y), text, font=font, fill=TEXT_COLOR)
+            # 绘制文字，加上ascent偏移以确保完整显示
+            draw.text((x + int(text_width / 2), y + ascent), char, font=font, fill=text_color, anchor="ms")
             
             # 裁剪图像
             trimmed_img = trim_image(img)
             
-            # 保存图像到对应数字文件夹
-            output_path = os.path.join(output_base_dir, str(digit), f"{font_name}_{digit}.png")
+            # 生成输出文件名
+            # 对于字母，使用"upper_X"和"lower_x"格式的文件夹
+            if char.isalpha():
+                if char.isupper():
+                    folder_name = f"upper_{char}"
+                    safe_char = f"upper_{char}"
+                else:
+                    folder_name = f"lower_{char}"
+                    safe_char = f"lower_{char}"
+            else:
+                folder_name = char
+                safe_char = "".join(c if c.isalnum() else f"_{ord(c)}_" for c in char) 
+                # 处理文件名中的特殊字符，确保生成的文件名在所有操作系统中都是合法的
+            
+            output_path = os.path.join(output_base_dir, folder_name, f"{font_name}_{safe_char}.png")
+            
+            # 保存图像
             trimmed_img.save(output_path, "PNG")
             
-        print(f"成功从 {ttf_path} 提取数字")
+        print(f"成功从 {ttf_path} 提取字符")
         return True
         
     except Exception as e:
@@ -271,12 +325,9 @@ def main():
     if not os.path.exists(output_base_dir):
         os.makedirs(output_base_dir)
     
-    # 创建0-9的子文件夹
-    for i in range(10):
-        digit_dir = os.path.join(output_base_dir, str(i))
-        if not os.path.exists(digit_dir):
-            os.makedirs(digit_dir)
-    
+    # chars = [str(i) for i in range(10)]
+    chars = [str(i) for i in range(10)] + list("cmCM")
+
     processed_count = 0
     
     # 处理 Windows 预定义字体列表
@@ -298,7 +349,7 @@ def main():
                 font_path = os.path.join(fonts_dir, font_file)
                 if os.path.exists(font_path):
                     print(f"正在处理预定义字体: {font_name} - {font_file}")
-                    if extract_numbers_from_ttf(font_path, output_base_dir):
+                    if extract_chars_from_ttf(font_path, output_base_dir, chars):
                         processed_count += 1
                     found = True
                     break
@@ -321,7 +372,7 @@ def main():
                 # 检查是否已处理过该文件
                 if font_path.lower() not in processed_files:
                     print(f"正在处理额外字体: {font_name}")
-                    if extract_numbers_from_ttf(font_path, output_base_dir):
+                    if extract_chars_from_ttf(font_path, output_base_dir, chars):
                         processed_count += 1
                     processed_files.add(font_path.lower())
         else:
