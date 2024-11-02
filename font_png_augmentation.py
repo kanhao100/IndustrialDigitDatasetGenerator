@@ -3,6 +3,8 @@ import numpy as np
 from PIL import Image
 import random
 from typing import Tuple, List
+from multiprocessing import Pool
+import multiprocessing
 
 class ImageAugmentor:
     def __init__(
@@ -189,15 +191,65 @@ class ImageAugmentor:
             
             elif aug_type == 'occlusion':
                 if random.random() < self.occlusion_prob:
-                    # 随机添加遮挡
                     w, h = img.size
-                    occlude_w = int(w * random.uniform(0.1, 0.3))
-                    occlude_h = int(h * random.uniform(0.1, 0.3))
-                    x = random.randint(0, w - occlude_w)
-                    y = random.randint(0, h - occlude_h)
-                    # 创建白色矩形
-                    occlude = Image.new('L', (occlude_w, occlude_h), 255)
-                    img.paste(occlude, (x, y))
+                    # 随机选择遮挡类型
+                    occlusion_type = random.choice(['rectangle', 'vertical', 'horizontal', 'circle'])
+                    
+                    if occlusion_type == 'rectangle':
+                        # 原有的矩形遮挡
+                        occlude_w = int(w * random.uniform(0.1, 0.4))
+                        occlude_h = int(h * random.uniform(0.1, 0.4))
+                        x = random.randint(0, w - occlude_w)
+                        y = random.randint(0, h - occlude_h)
+                        occlude = Image.new('L', (occlude_w, occlude_h), 255)
+                        img.paste(occlude, (x, y))
+                    
+                    elif occlusion_type == 'vertical':
+                        # 竖条纹遮挡
+                        num_stripes = random.randint(1, 2)  # 条纹数量
+                        stripe_width = int(w * random.uniform(0.05, 0.15))  # 条纹宽度
+                        for _ in range(num_stripes):
+                            x = random.randint(0, w - stripe_width)
+                            # 添加随机高度
+                            stripe_height = int(h * random.uniform(0.4, 0.9))  # 条纹高度
+                            y = random.randint(0, h - stripe_height)  # 随机起始位置
+                            occlude = Image.new('L', (stripe_width, stripe_height), 255)
+                            img.paste(occlude, (x, y))
+                    
+                    elif occlusion_type == 'horizontal':
+                        # 横条纹遮挡
+                        num_stripes = random.randint(1, 2)  # 条纹数量
+                        stripe_height = int(h * random.uniform(0.05, 0.15))  # 条纹高度
+                        for _ in range(num_stripes):
+                            y = random.randint(0, h - stripe_height)
+                            # 添加随机宽度
+                            stripe_width = int(w * random.uniform(0.4, 0.9))  # 条纹宽度
+                            x = random.randint(0, w - stripe_width)  # 随机起始位置
+                            occlude = Image.new('L', (stripe_width, stripe_height), 255)
+                            img.paste(occlude, (x, y))
+                    
+                    elif occlusion_type == 'circle':
+                        # 圆形遮挡
+                        from PIL import ImageDraw
+                        num_circles = random.randint(1, 2)  # 圆形数量
+                        for _ in range(num_circles):
+                            # 创建一个透明遮罩
+                            mask = Image.new('L', (w, h), 0)
+                            draw = ImageDraw.Draw(mask)
+                            
+                            # 随机圆形参数
+                            radius = int(min(w, h) * random.uniform(0.1, 0.2))
+                            center_x = random.randint(radius, w - radius)
+                            center_y = random.randint(radius, h - radius)
+                            
+                            # 绘制白色圆形
+                            draw.ellipse(
+                                [center_x - radius, center_y - radius,
+                                 center_x + radius, center_y + radius],
+                                fill=255
+                            )
+                            # 将圆形遮罩应用到图像上
+                            img.paste(255, (0, 0), mask)
             
             elif aug_type == 'distortion':
                 # 使用PIL的变形方法
@@ -412,27 +464,51 @@ class ImageAugmentor:
         
         return canvas, yolo_annotations
 
+def generate_single_image(args):
+    """生成单张图像的函数(用于多进程)"""
+    i, input_dir, output_dir, augmentor = args
+    image, annotations = augmentor.generate_image(input_dir)
+    
+    # 保存图像和标签
+    image_path = os.path.join(output_dir, f"image_{i:06d}.png")
+    label_path = os.path.join(output_dir, f"image_{i:06d}.txt")
+    
+    Image.fromarray(image).save(image_path)
+    with open(label_path, 'w') as f:
+        for ann in annotations:
+            f.write(f"{ann[0]} {ann[1]:.6f} {ann[2]:.6f} {ann[3]:.6f} {ann[4]:.6f}\n")
+
 def generate_dataset(
     input_dir: str,
     output_dir: str,
     num_images: int,
     augmentor: ImageAugmentor
 ):
-    """生成数据集"""
+    """生成数据集(多进程版本)"""
     os.makedirs(output_dir, exist_ok=True)
     
-    for i in range(num_images):
-        image, annotations = augmentor.generate_image(input_dir)
-        # 保存图像和标签
-        image_path = os.path.join(output_dir, f"image_{i:06d}.png")
-        label_path = os.path.join(output_dir, f"image_{i:06d}.txt")
-        
-        Image.fromarray(image).save(image_path)
-        # 保存YOLO格式的标注
-        with open(label_path, 'w') as f:
-            for ann in annotations:
-                # 每行格式：class_id center_x center_y width height
-                f.write(f"{ann[0]} {ann[1]:.6f} {ann[2]:.6f} {ann[3]:.6f} {ann[4]:.6f}\n")
+    # 获取CPU核心数
+    num_cores = multiprocessing.cpu_count()
+    # 创建进程池
+    pool = Pool(processes=num_cores)
+    
+    # 准备参数
+    args_list = [(i, input_dir, output_dir, augmentor) for i in range(num_images)]
+    
+    # 使用进度条
+    from tqdm import tqdm
+    print(f"使用 {num_cores} 个进程生成数据集...")
+    
+    # 使用进程池映射任务
+    list(tqdm(
+        pool.imap(generate_single_image, args_list),
+        total=num_images,
+        desc="生成数据集"
+    ))
+    
+    # 关闭进程池
+    pool.close()
+    pool.join()
 
 if __name__ == "__main__":
     # 配置参数
@@ -452,7 +528,7 @@ if __name__ == "__main__":
                                           # 例如：0.04 表示数字最小为画布的 4%
         "max_scale": 0.15,                # 数字最大缩放比例（相对于 canvas_size）
                                           # 例如：0.15 表示数字最大为画布的 15%
-        "min_spacing": 5,                  # 数字之间的最小间距（像素）
+        "min_spacing": 10,                  # 数字之间的最小间距（像素）
                                           # 会被 placement_density 进一步调整
         "placement_density": 0.8,        # 数字放置密度，范围 0.0-1.0
                                           # - 0.0: 最稀疏，数字间距最大
@@ -473,7 +549,7 @@ if __name__ == "__main__":
                                                     # - 'salt_pepper': 椒盐噪声
                                                     # - 'speckle': 斑点噪声
                                                     # - 'poisson': 泊松噪声
-        "occlusion_prob": 0.5,  # 应用遮挡增强的概率，范围 0.0-1.0
+        "occlusion_prob": 0.6,  # 应用遮挡增强的概率，范围 0.0-1.0
         "distortion_range": (0.9, 1.1),  # 扭曲变形的范围
                                         # - 小于1: 压缩
                                         # - 大于1: 拉伸
@@ -488,6 +564,6 @@ if __name__ == "__main__":
     generate_dataset(
         input_dir="font_numbers",
         output_dir="augmented_dataset",
-        num_images=200,
+        num_images=2000,
         augmentor=augmentor
     )
