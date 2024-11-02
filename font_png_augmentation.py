@@ -254,25 +254,33 @@ class ImageAugmentor:
             elif aug_type == 'distortion':
                 # 使用PIL的变形方法
                 w, h = img.size
-                # 计算扭曲变换的控制点
-                distort_x = random.uniform(*self.distortion_range)
-                distort_y = random.uniform(*self.distortion_range)
+                # 限制扭曲范围在更小的区间内，避免过度变形
+                max_distort = 0.15  # 最大扭曲幅度为15%
                 
-                # 定义8个系数的透视变换
-                # 源点和目标点的对应关系
-                width = w - 1
-                height = h - 1
+                # 随机生成四个角点的偏移量
+                offsets = [
+                    (random.uniform(-max_distort, max_distort) * w,  # 左上x,y
+                     random.uniform(-max_distort, max_distort) * h),
+                    (random.uniform(-max_distort, max_distort) * w,  # 右上x,y
+                     random.uniform(-max_distort, max_distort) * h),
+                    (random.uniform(-max_distort, max_distort) * w,  # 右下x,y
+                     random.uniform(-max_distort, max_distort) * h),
+                    (random.uniform(-max_distort, max_distort) * w,  # 左下x,y
+                     random.uniform(-max_distort, max_distort) * h),
+                ]
                 
+                # 计算变换后的四个角点坐标
+                width, height = w - 1, h - 1
                 coeffs = (
-                    0, 0,                     # 左上角
-                    width * distort_x, 0,     # 右上角
-                    width * distort_x, height * distort_y,  # 右下角
-                    0, height * distort_y     # 左下角
+                    0 + offsets[0][0], 0 + offsets[0][1],           # 左上角
+                    width + offsets[1][0], 0 + offsets[1][1],       # 右上角
+                    width + offsets[2][0], height + offsets[2][1],  # 右下角
+                    0 + offsets[3][0], height + offsets[3][1]       # 左下角
                 )
                 
                 img = img.transform(
                     (w, h),
-                    Image.QUAD,  # 使用四边形变换而不是透视变换
+                    Image.QUAD,
                     coeffs,
                     Image.BICUBIC,
                     fillcolor=255
@@ -303,7 +311,7 @@ class ImageAugmentor:
                 # 将图像转换为numpy数组进行处理
                 img_array = np.array(img)
                 # 只对非白色区域调整亮度
-                mask = img_array < 50  # 修改：使用更严格的阈值来识别数字区域
+                mask = img_array < 50  # 修��：使用更严格的阈值来识别数字区域
                 if mask.any():  # 确保有非白色像素
                     brightness_factor = random.uniform(*self.brightness_range)
                     # 对非白色区域应用亮度调整
@@ -564,6 +572,6 @@ if __name__ == "__main__":
     generate_dataset(
         input_dir="font_numbers",
         output_dir="augmented_dataset",
-        num_images=2000,
+        num_images=200,
         augmentor=augmentor
     )
