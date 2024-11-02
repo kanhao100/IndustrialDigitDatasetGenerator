@@ -58,7 +58,8 @@ def visualize_yolo_annotations(image_path: str, label_path: str):
 
 if __name__ == "__main__":
     # 选择一张图片进行测试
-    image_path = "./augmented_dataset/image_000000.png"  # 替换为实际的图片路径
-    label_path = "./augmented_dataset/image_000000.txt"  # 对应的标注文件
+    base_path = "./augmented_dataset/image_000001"  # 替换为实际的图片基础路径
+    image_path = f"{base_path}.png"  # 图片路径
+    label_path = f"{base_path}.txt"  # 对应的标注文件
     
     visualize_yolo_annotations(image_path, label_path) 

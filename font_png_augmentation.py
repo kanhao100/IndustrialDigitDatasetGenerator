@@ -1,10 +1,11 @@
 import os
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import random
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 from multiprocessing import Pool
 import multiprocessing
+import math
 
 class ImageAugmentor:
     def __init__(
@@ -24,10 +25,6 @@ class ImageAugmentor:
         max_scale: float = 0.4,                # 数字最大缩放比例（相对于 canvas_size）
                                           # 例如：0.4 表示数字最大为画布的 40%
         min_spacing: int = 5,                  # 数字之间的最小间距（像素）
-                                          # 会被 placement_density 进一步调整
-        placement_density: float = 0.7,        # 数字放置密度，范围 0.0-1.0
-                                          # - 0.0: 最稀疏，数字间距最大
-                                          # - 1.0: 最密集，数字间距最小
         max_placement_attempts: int = 100,      # 寻找有效放置位置的最大尝试次数
                                           # 超过此次数认为无法放置更多数字
         use_real_background: bool = False,      # 新增：是否使用真实背景图
@@ -37,6 +34,8 @@ class ImageAugmentor:
         occlusion_prob: float = 0.3,  # 新增：遮挡概率
         distortion_range: Tuple[float, float] = (0.8, 1.2),  # 新增：变形范围
         brightness_range: Tuple[float, float] = (0.7, 1.3),  # 新增：亮度调节范围
+        noise_patterns: List[str] = None,
+        noise_pattern_weights: Dict[str, float] = None
     ):
         self.canvas_size = canvas_size
         self.background_noise_type = background_noise_type
@@ -46,7 +45,7 @@ class ImageAugmentor:
         self.max_digits = max_digits
         self.min_scale = min_scale
         self.max_scale = max_scale
-        self.min_spacing = int(min_spacing * (1 - placement_density))  # 根据密度调整间距
+        self.min_spacing = min_spacing
         self.max_placement_attempts = max_placement_attempts
         self.use_real_background = use_real_background
         self.real_background_dir = real_background_dir
@@ -60,11 +59,26 @@ class ImageAugmentor:
         self.occlusion_prob = occlusion_prob
         self.distortion_range = distortion_range
         self.brightness_range = brightness_range
+        
+        # 更新噪声图案参数
+        self.noise_patterns = noise_patterns or [
+            'circle', 'vertical_stripe', 'horizontal_stripe', 
+            'rectangle', 'hexagon', 'triangle'
+        ]
+        self.noise_pattern_weights = noise_pattern_weights or {
+            'circle': 0.2,
+            'vertical_stripe': 0.2,
+            'horizontal_stripe': 0.2,
+            'rectangle': 0.2,
+            'hexagon': 0.1,
+            'triangle': 0.1
+        }
+
         if use_real_background:
-            # 获取所有非patches开头的jpg文件
             self.real_background_files = [
                 f for f in os.listdir(real_background_dir) 
-                if f.endswith('.jpg') and not f.startswith('patches')
+                if f.endswith('.jpg') and not f.startswith('patches') 
+                # 对于NEU-DET数据集，只使用jpg格式的背景图, 且排除掉patches开头的文件，因为遮挡过于严重
             ]
         
     def _generate_perlin_noise(self, shape: Tuple[int, int]) -> np.ndarray:
@@ -231,7 +245,7 @@ class ImageAugmentor:
                     elif occlusion_type == 'circle':
                         # 圆形遮挡
                         from PIL import ImageDraw
-                        num_circles = random.randint(1, 2)  # 圆形数量
+                        num_circles = random.randint(1, 2)  # 圆形数
                         for _ in range(num_circles):
                             # 创建一个透明遮罩
                             mask = Image.new('L', (w, h), 0)
@@ -295,7 +309,7 @@ class ImageAugmentor:
                 
                 # 创建新的白色背景图像
                 new_img = Image.new('L', (w, h), 255)
-                # 计算粘贴位置使图像居中
+                # 计算粘���位置使图像���中
                 paste_x = (w - new_w) // 2
                 paste_y = (h - new_h) // 2
                 new_img.paste(img, (paste_x, paste_y))
@@ -308,30 +322,43 @@ class ImageAugmentor:
             
             elif aug_type == 'brightness':
                 # 随机调节亮度
-                # 将图像转换为numpy数组进行处理
                 img_array = np.array(img)
-                # 只对非白色区域调整亮度
-                mask = img_array < 50  # 修��：使用更严格的阈值来识别数字区域
-                if mask.any():  # 确保有非白色像素
+                # 识别非背景区域（灰度值小于240的区域视为数字）
+                mask = img_array < 240
+                
+                if mask.any():
                     brightness_factor = random.uniform(*self.brightness_range)
-                    # 对非白色区域应用亮度调整
-                    adjusted = img_array.copy()  # 修改：创建副本避免直接修改原数组
-                    adjusted[mask] = np.clip(
-                        img_array[mask] * brightness_factor,
-                        0, 
-                        50  # 修改：限制最大值，保持数字清晰度
-                    ).astype(np.uint8)
+                    adjusted = img_array.copy()
+                    
+                    if brightness_factor < 1:  # 变暗
+                        # 将非背景区域的像素值向黑色(0)靠近
+                        adjusted[mask] = (img_array[mask] * brightness_factor).astype(np.uint8)
+                    else:  # 变亮
+                        # 将非背景区域的像素值向背景色(255)靠近
+                        diff = 255 - img_array[mask]  # 与背景色的差值
+                        adjusted[mask] = (
+                            img_array[mask] + diff * (brightness_factor - 1)
+                        ).astype(np.uint8)
+                    
+                    # 确保值在有效范围内
+                    adjusted = np.clip(adjusted, 0, 255)
                     img = Image.fromarray(adjusted)
         
         # 最后将PIL图像转回numpy数组
         return np.array(img)
 
-    def _load_and_resize_digit(self, digit_path: str, target_size: int) -> np.ndarray:
-        """加载并调整数字图片大小"""
-        # 加载图像
-        img = Image.open(digit_path).convert('L')
-        img_array = np.array(img)
-        
+    def _load_digit(self, digit_path: str) -> np.ndarray:
+        """加载数字图片"""
+        return np.array(Image.open(digit_path).convert('L'))
+
+    def _resize_digit(self, img_array: np.ndarray, target_size: int) -> np.ndarray:
+        """调整数字图片大小
+        Args:
+            img_array: 输入图像数组，形状为(H, W)
+            target_size: 目标尺寸
+        Returns:
+            np.ndarray: 调整大小后的图像数组，形状为(target_size, target_size)
+        """
         # 计算有效边界框（非白色区域）
         y_indices, x_indices = np.where(img_array < 255)
         if len(y_indices) > 0 and len(x_indices) > 0:
@@ -420,52 +447,159 @@ class ImageAugmentor:
                 
         raise ValueError("无法找到有效的放置位置")
 
+    def _generate_noise_pattern(self, size: int) -> np.ndarray:
+        """生成各种噪声图案"""
+        pattern_type = random.choices(
+            list(self.noise_pattern_weights.keys()),
+            weights=list(self.noise_pattern_weights.values())
+        )[0]
+            
+        img = Image.new('L', (size, size), 255)
+        draw = ImageDraw.Draw(img)
+        
+        if pattern_type == 'circle':
+            is_solid = True  # 默认实心，空心与数字0容易造成误判
+            if is_solid:
+                draw.ellipse([0, 0, size-1, size-1], fill=0)
+            else:
+                line_width = int(size * random.uniform(0.05, 0.15))
+                draw.ellipse([0, 0, size-1, size-1], outline=0, width=line_width)
+                
+        elif pattern_type == 'hexagon':
+            # 六边形噪声
+            is_solid = random.random() < 0.7
+            # is_solid = True  # 默认实心
+            # 计算六边形的顶点
+            center_x = size / 2
+            center_y = size / 2
+            radius = size * random.uniform(0.3, 0.45)  # 随机半径
+            points = []
+            for i in range(6):
+                angle = i * 60  # 六边形每个角是60度
+                x = center_x + radius * math.cos(math.radians(angle))
+                y = center_y + radius * math.sin(math.radians(angle))
+                points.append((x, y))
+            
+            if is_solid:
+                draw.polygon(points, fill=0)
+            else:
+                line_width = int(size * random.uniform(0.05, 0.2))
+                draw.line(points + [points[0]], fill=0, width=line_width)
+                
+        elif pattern_type == 'triangle':
+            # 三角形噪声
+            is_solid = True  # 默认实心
+            # 生成三角形的三个顶点
+            margin = size * 0.1  # 边距
+            points = [
+                (random.uniform(margin, size-margin), 
+                 random.uniform(margin, size-margin)) 
+                for _ in range(3)
+            ]
+            
+            if is_solid:
+                draw.polygon(points, fill=0)
+            else:
+                line_width = int(size * random.uniform(0.15, 0.25))
+                draw.line(points + [points[0]], fill=0, width=line_width)
+                
+        elif pattern_type == 'vertical_stripe':
+            num_stripes = random.randint(1, 1)
+            for _ in range(num_stripes):
+                stripe_width = int(size * random.uniform(0.1, 0.3))
+                stripe_height = int(size * random.uniform(0.6, 1.0))
+                x = random.randint(0, size - stripe_width)
+                y = random.randint(0, size - stripe_height)
+                draw.rectangle([x, y, x + stripe_width - 1, y + stripe_height - 1], fill=0)
+                
+        elif pattern_type == 'horizontal_stripe':
+            num_stripes = random.randint(1, 1)
+            for _ in range(num_stripes):
+                stripe_width = int(size * random.uniform(0.6, 1.0))
+                stripe_height = int(size * random.uniform(0.1, 0.3))
+                x = random.randint(0, size - stripe_width)
+                y = random.randint(0, size - stripe_height)
+                draw.rectangle([x, y, x + stripe_width - 1, y + stripe_height - 1], fill=0)
+                
+        elif pattern_type == 'rectangle':
+            is_solid = random.random() < 0.7
+            rect_width = int(size * random.uniform(0.4, 0.8))
+            rect_height = int(size * random.uniform(0.4, 0.8))
+            x = random.randint(0, size - rect_width)
+            y = random.randint(0, size - rect_height)
+            if is_solid:
+                draw.rectangle([x, y, x + rect_width - 1, y + rect_height - 1], fill=0)
+            else:
+                line_width = int(size * random.uniform(0.05, 0.3))
+                draw.rectangle([x, y, x + rect_width - 1, y + rect_height - 1], 
+                             outline=0, width=line_width)
+        
+        return np.array(img)
+
     def generate_image(self, input_dir: str) -> Tuple[np.ndarray, List[Tuple]]:
-        """生成一张包含多个数字的增强图像，返回图像和YOLO格式的标注"""
+        """生成一张包含多个数字和噪声图案的增强图像"""
         # 创建空白画布
         canvas = np.full((self.canvas_size, self.canvas_size), 255, dtype=np.uint8)
         
-        # 随机决定数字数量
+        # 随机决定数字和噪声数量
         num_digits = random.randint(self.min_digits, self.max_digits)
+        num_noise_patterns = int(num_digits * 0.5)  # 噪声数量为数字数量的一半
         
-        # 记录已放置的数字位置和图像
-        occupied_positions = []
-        yolo_annotations = []  # 修改：使用YOLO格式的标注
+        # 准备所有需要放置的项目
+        placement_items = []  # [(type, img, digit, size), ...]
         
-        # 放置数字
+        # 准备数字
         for _ in range(num_digits):
-            digit = random.randint(0, 9)  # class_id 就是数字本身
+            digit = random.randint(0, 9)
             digit_dir = os.path.join(input_dir, str(digit))
             digit_files = os.listdir(digit_dir)
             digit_file = random.choice(digit_files)
             digit_path = os.path.join(digit_dir, digit_file)
             
+            # 加载和调整数字大小
+            digit_img = self._load_digit(digit_path)
             digit_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
-            digit_img = self._load_and_resize_digit(digit_path, digit_size)
-            
-            # 应用数据增强
+            digit_img = self._resize_digit(digit_img, digit_size)
             digit_img = self._apply_augmentations(digit_img)
             
+            placement_items.append(('digit', digit_img, digit, digit_size))
+        
+        # 准备噪声图案
+        for _ in range(num_noise_patterns):
+            noise_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale*3))
+            noise_img = self._generate_noise_pattern(noise_size)
+            noise_img = self._apply_augmentations(noise_img)
+            
+            placement_items.append(('noise', noise_img, None, noise_size))
+        
+        # 随机打乱放置顺序
+        random.shuffle(placement_items)
+        
+        # 记录已放置的位置和YOLO标注
+        occupied_positions = []
+        yolo_annotations = []
+        
+        # 放置所有项目
+        for item_type, img, digit, size in placement_items:
             try:
-                x, y = self._find_valid_position(canvas, digit_img, occupied_positions)
+                x, y = self._find_valid_position(canvas, img, occupied_positions)
                 # 只复制非白色像素
-                mask = digit_img < 255
-                canvas[y:y+digit_size, x:x+digit_size][mask] = digit_img[mask]
-                occupied_positions.append((x, y, digit_img))
+                mask = img < 255
+                canvas[y:y+size, x:x+size][mask] = img[mask]
+                occupied_positions.append((x, y, img))
                 
-                # 计算YOLO格式的标注
-                # 中心点坐标
-                center_x = (x + digit_size/2) / self.canvas_size
-                center_y = (y + digit_size/2) / self.canvas_size
-                # 宽高
-                width = digit_size / self.canvas_size
-                height = digit_size / self.canvas_size
-                
-                # 添加YOLO格式标注：class_id center_x center_y width height
-                yolo_annotations.append((digit, center_x, center_y, width, height))
+                # 只为数字生成YOLO标注
+                if item_type == 'digit':
+                    # 计算YOLO格式的标注
+                    center_x = (x + size/2) / self.canvas_size
+                    center_y = (y + size/2) / self.canvas_size
+                    width = size / self.canvas_size
+                    height = size / self.canvas_size
+                    
+                    yolo_annotations.append((digit, center_x, center_y, width, height))
                 
             except ValueError:
-                break
+                continue  # 如果找不到有效位置，跳过当前项目
         
         # 添加工业环境背景噪声
         canvas = self._add_industrial_background(canvas)
@@ -537,15 +671,11 @@ if __name__ == "__main__":
         "max_scale": 0.15,                # 数字最大缩放比例（相对于 canvas_size）
                                           # 例如：0.15 表示数字最大为画布的 15%
         "min_spacing": 10,                  # 数字之间的最小间距（像素）
-                                          # 会被 placement_density 进一步调整
-        "placement_density": 0.8,        # 数字放置密度，范围 0.0-1.0
-                                          # - 0.0: 最稀疏，数字间距最大
-                                          # - 1.0: 最密集，数字间距最小
         "max_placement_attempts": 100,      # 寻找有效放置位置的最大尝试次数
                                           # 超过此次数认为无法放置更多数字
         "use_real_background": True,      # 是否使用真实背景图替代生成的噪声背景
         "real_background_dir": "./NEU-DET/IMAGES",  # 真实背景图片目录路径
-        "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','brightness'],  # 启用的数据增强类型：
+        "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','rotation', 'brightness'],  # 启用的数据增强类型：
                                                                      # - 'noise': 添加噪声
                                                                      # - 'occlusion': 随机遮挡
                                                                      # - 'distortion': 扭曲变形
@@ -561,9 +691,24 @@ if __name__ == "__main__":
         "distortion_range": (0.9, 1.1),  # 扭曲变形的范围
                                         # - 小于1: 压缩
                                         # - 大于1: 拉伸
-        "brightness_range": (0.3, 0.6),  # 亮度调节的范围
+        "brightness_range": (1.1, 1.7),  # 亮度调节的范围
                                         # - 小于1: 变暗
                                         # - 大于1: 变亮
+        "noise_patterns": ['circle', 'vertical_stripe', 'horizontal_stripe', 'rectangle', 'hexagon', 'triangle'],  # 启用的噪声图案类型
+                                        # - 'circle': 圆形（实心/空心）
+                                        # - 'vertical_stripe': 竖条纹
+                                        # - 'horizontal_stripe': 横条纹
+                                        # - 'rectangle': 矩形（实心/空心）
+                                        # - 'hexagon': 六边形（实心/空心）
+                                        # - 'triangle': 三角形（实心/空心）
+        "noise_pattern_weights": {       # 各种噪声图案的生成权重
+            'circle': 0.2,              # 圆形的生成概率
+            'vertical_stripe': 0.2,     # 竖条纹的生成概率
+            'horizontal_stripe': 0.2,   # 横条纹的生成概率
+            'rectangle': 0.2,          # 矩形的生成概率
+            'hexagon': 0.1,              # 六边形的生成概率
+            'triangle': 0.1              # 三角形的生成概率
+        },
     }
     
     augmentor = ImageAugmentor(**config)
