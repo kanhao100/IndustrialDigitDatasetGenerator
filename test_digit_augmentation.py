@@ -163,7 +163,7 @@ def test_single_digit_augmentations():
     digit_path = os.path.join(digit_dir, digit_file)
     
     # 显示4x4的增强效果
-    rows, cols = 4, 4
+    rows, cols = 6, 6
     fig, axes = plt.subplots(rows, cols, figsize=(15, 15))
     fig.suptitle(f'Various enhanced effects for the digit {test_digit}', fontsize=16)
     
@@ -186,7 +186,7 @@ def test_single_digit_augmentations():
 
 if __name__ == "__main__":
     # 测试所有数字的增强效果
-    test_digit_augmentation()
+    # test_digit_augmentation()
     
     # 测试单个数字的多种增强效果
-    # test_single_digit_augmentations() 
+    test_single_digit_augmentations() 
