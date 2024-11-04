@@ -71,6 +71,12 @@ IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字
 ```bash
 pip install numpy pillow matplotlib tqdm
 ```
+或者, 这是我们的环境配置。
+```bash
+conda create -n IDDG_env python=3.10
+conda activate IDDG_env
+pip install -r requirements.txt
+```
 
 ## 使用方法
 
@@ -79,6 +85,9 @@ pip install numpy pillow matplotlib tqdm
 python font_extractor.py
 ```
 从系统中提取数字字体并保存为PNG格式。
+Tips：
+- 对于提取出来的字体进行手动查看之后再生成数据集，以防提取出不合适的字体。
+- 如果你知道你所应用的场景是哪一种字体，可以修改`font_extractor.py`中的字体目录，生成指定的字体以提高数据集的精确度。
 
 ### 2. 数据集生成
 ```bash
@@ -91,6 +100,16 @@ python font_png_augmentation.py
 python visualize_annotations.py
 ```
 可视化生成的图像及其YOLO格式标注。
+
+```bash
+python test_noise_pattern.py
+```
+可视化测试噪声图案生成效果  
+
+```bash
+python test_digit_augmentation.py
+```
+可视化测试数字增强效果
 
 ## 详细配置参数说明
 
@@ -187,7 +206,7 @@ IndustrialDigitDatasetGenerator/
 ## 效果展示
 
 ### 数据增强效果
-![数据增强效果](docs/images/Digital_Enhanced_sample.jpg)
+![数据增强效果](docs/images/Digital_Enhanced_sample.JPG)
 ![数据增强效果](docs/images/single_digit_augmentations_8.JPG)
 
 

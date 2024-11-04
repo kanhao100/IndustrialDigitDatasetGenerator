@@ -7,6 +7,8 @@ from multiprocessing import Pool
 import multiprocessing
 import math
 
+from default_config import DEFAULT_CONFIG
+
 class ImageAugmentor:
     def __init__(
         self,
@@ -216,8 +218,8 @@ class ImageAugmentor:
                     
                     if occlusion_type == 'rectangle':
                         # 原有的矩形遮挡
-                        occlude_w = int(w * random.uniform(0.1, 0.4))
-                        occlude_h = int(h * random.uniform(0.1, 0.4))
+                        occlude_w = int(w * random.uniform(0.2, 0.6))
+                        occlude_h = int(h * random.uniform(0.2, 0.6))
                         x = random.randint(0, w - occlude_w)
                         y = random.randint(0, h - occlude_h)
                         occlude = Image.new('L', (occlude_w, occlude_h), 255)
@@ -230,7 +232,7 @@ class ImageAugmentor:
                         for _ in range(num_stripes):
                             x = random.randint(0, w - stripe_width)
                             # 添加随机高度
-                            stripe_height = int(h * random.uniform(0.4, 0.9))  # 条纹高度
+                            stripe_height = int(h * random.uniform(0.5, 0.9))  # 条纹高度
                             y = random.randint(0, h - stripe_height)  # 随机起始位置
                             occlude = Image.new('L', (stripe_width, stripe_height), 255)
                             img.paste(occlude, (x, y))
@@ -242,7 +244,7 @@ class ImageAugmentor:
                         for _ in range(num_stripes):
                             y = random.randint(0, h - stripe_height)
                             # 添加随机宽度
-                            stripe_width = int(w * random.uniform(0.4, 0.9))  # 条纹宽度
+                            stripe_width = int(w * random.uniform(0.5, 0.9))  # 条纹宽度
                             x = random.randint(0, w - stripe_width)  # 随机起始位置
                             occlude = Image.new('L', (stripe_width, stripe_height), 255)
                             img.paste(occlude, (x, y))
@@ -322,7 +324,7 @@ class ImageAugmentor:
             
             elif aug_type == 'rotation':
                 # 随机旋转
-                angle = random.uniform(-10, 10)
+                angle = random.uniform(-15, 15)
                 img = img.rotate(angle, Image.BICUBIC, expand=False, fillcolor=255)
             
             elif aug_type == 'brightness':
@@ -495,7 +497,7 @@ class ImageAugmentor:
             # 三角形噪声
             is_solid = True  # 默认实心
             # 生成三角形的三个顶点
-            margin = size * 0.1  # 边距
+            margin = size * 0.08  # 边距
             points = [
                 (random.uniform(margin, size-margin), 
                  random.uniform(margin, size-margin)) 
@@ -505,7 +507,7 @@ class ImageAugmentor:
             if is_solid:
                 draw.polygon(points, fill=0)
             else:
-                line_width = int(size * random.uniform(0.15, 0.25))
+                line_width = int(size * random.uniform(0.2, 0.4))
                 draw.line(points + [points[0]], fill=0, width=line_width)
                 
         elif pattern_type == 'vertical_stripe':
@@ -689,64 +691,7 @@ def generate_dataset(
 
 if __name__ == "__main__":
     # 配置参数
-    config = {
-        "canvas_size": 256,          # 输出图像的尺寸大小，生成 canvas_size x canvas_size 的正方形图像
-        "background_noise_type": "perlin",  # 背景噪声类型：
-                                           # - 'perlin': 柏林噪声，生成连续的、自然的纹理
-                                           # - 'simplex': 单纯形噪声，类似柏林噪声但性能更好
-                                           # - 'gaussian': 高斯噪声，完全随机的噪点
-        "background_noise_intensity": 0.9,  # 背景噪声强度，范围 0.0-1.0
-                                            # 值越大，背景噪声越明显
-        "digit_noise_intensity_range": (0.0, 0.1),  # 数字噪声强度范围，范围 0.0-1.0
-                                                    # 每个数字会随机选择这个范围内的噪声强度
-        "min_digits": 5,                   # 每张图像最少数字数量
-        "max_digits": 15,                  # 每张图像最多数字数量
-        "min_scale": 0.05,                # 数字最小缩放比例（相对于 canvas_size）
-                                          # 例如：0.04 表示数字最小为画布的 4%
-        "max_scale": 0.15,                # 数字最大缩放比例（相对于 canvas_size）
-                                          # 例如：0.15 表示数字最大为画布的 15%
-        "min_spacing": 10,                  # 数字之间的最小间距（像素）
-        "max_placement_attempts": 100,      # 寻找有效放置位置的最大尝试次数
-                                          # 超过此次数认为无法放置更多数字
-        "use_real_background": True,      # 是否使用真实背景图替代生成的噪声背景
-        "real_background_dir": "./NEU-DET/IMAGES",  # 真实背景图片目录路径
-        "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','rotation', 'brightness'],  # 启用的数据增强类型：
-                                                                     # - 'noise': 添加噪声
-                                                                     # - 'occlusion': 随机遮挡
-                                                                     # - 'distortion': 扭曲变形
-                                                                     # - 'aspect_ratio': 改变长宽比
-                                                                     # - 'rotation': 旋转
-                                                                     # - 'brightness': 亮度调节
-        "noise_types": ['gaussian', 'salt_pepper', 'speckle'],  # 启用的噪声类型：
-                                                    # - 'gaussian': 高斯噪声
-                                                    # - 'salt_pepper': 椒盐噪声
-                                                    # - 'speckle': 斑点噪声
-                                                    # - 'poisson': 泊松噪声
-        "occlusion_prob": 0.6,  # 应用遮挡增强的概率，范围 0.0-1.0
-        "distortion_range": (0.9, 1.1),  # 扭曲变形的范围
-                                        # - 小于1: 压缩
-                                        # - 大于1: 拉伸
-        "brightness_range": (1.1, 1.7),  # 亮度调节的范围
-                                        # - 小于1: 变暗
-                                        # - 大于1: 变亮
-        "noise_patterns": ['circle', 'vertical_stripe', 'horizontal_stripe', 'rectangle', 'hexagon', 'triangle'],  # 启用的噪声图案类型
-                                        # - 'circle': 圆形（实心/空心）
-                                        # - 'vertical_stripe': 竖条纹
-                                        # - 'horizontal_stripe': 横条纹
-                                        # - 'rectangle': 矩形（实心/空心）
-                                        # - 'hexagon': 六边形（实心/空心）
-                                        # - 'triangle': 三角形（实心/空心）
-        "noise_pattern_weights": {       # 各种噪声图案的生成权重
-            'circle': 0.2,              # 圆形的生成概率
-            'vertical_stripe': 0.2,     # 竖条纹的生成概率
-            'horizontal_stripe': 0.2,   # 横条纹的生成概率
-            'rectangle': 0.2,          # 矩形的生成概率
-            'hexagon': 0.1,              # 六边形的生成概率
-            'triangle': 0.1              # 三角形的生成概率
-        },
-        "annotate_letters": True,    # 是否为字母生成YOLO标注
-        "letter_count": 2  # 单张图片字母出现总数  
-    }
+    config = DEFAULT_CONFIG.copy()
     
     augmentor = ImageAugmentor(**config)
     
