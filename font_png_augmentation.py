@@ -39,7 +39,9 @@ class ImageAugmentor:
         noise_patterns: List[str] = None,
         noise_pattern_weights: Dict[str, float] = None,
         annotate_letters: bool = False,  # 新增：是否为字母生成YOLO标注
-        letter_count: int = 999  # 字母出现次数限制
+        letter_count: int = 999,  # 字母出现次数限制
+        augmentation_prob: float = 0.7,  # 新增：应用增强的概率
+        char_weights: Dict[str, float] = None,  # 新增：字符权重字典
         
     ):
         self.canvas_size = canvas_size
@@ -80,6 +82,15 @@ class ImageAugmentor:
         self.annotate_letters = annotate_letters
         self.letter_count = letter_count
         self.total_letters = 0  # 用于跟踪字母总数
+        self.augmentation_prob = augmentation_prob
+        
+        # 设置默认的字符权重
+        self.char_weights = char_weights or {
+            '0': 1.0, '1': 1.0, '2': 1.0, '3': 1.0, '4': 1.0,
+            '5': 1.0, '6': 1.0, '7': 1.0, '8': 1.0, '9': 1.0,
+            'upper': 1.0,  # 大写字母的权重
+            'lower': 1.0,  # 小写字母的权重
+        }
         
         if use_real_background:
             self.real_background_files = [
@@ -87,6 +98,13 @@ class ImageAugmentor:
                 if f.endswith('.jpg') and not f.startswith('patches') 
                 # 对于NEU-DET数据集，只使用jpg格式的背景图, 且排除掉patches开头的文件，因为遮挡过于严重
             ]
+        
+        # 添加统计字典
+        self.char_statistics = {
+            'digits': {str(i): 0 for i in range(10)},
+            'upper': 0,
+            'lower': 0
+        }
         
     def _generate_perlin_noise(self, shape: Tuple[int, int]) -> np.ndarray:
         """生成柏林噪声作为工业环境背景"""
@@ -351,7 +369,7 @@ class ImageAugmentor:
                     adjusted = np.clip(adjusted, 0, 255)
                     img = Image.fromarray(adjusted)
         
-        # 最后将PIL图像转回numpy数组
+        # 后将PIL图像转回numpy数组
         return np.array(img)
 
     # def _load_digit(self, digit_path: str) -> np.ndarray:
@@ -398,7 +416,7 @@ class ImageAugmentor:
         return final_img
 
     def _get_bounding_box(self, digit_img: np.ndarray) -> Tuple[int, int, int, int]:
-        """获取数字图像中非空白像素的边界框
+        """获取数图像中非空白像素的边界框
         返回：(min_x, min_y, width, height)
         """
         # 因为是灰度图，背景是255（白色），我们找出非255的像素
@@ -462,7 +480,7 @@ class ImageAugmentor:
         raise ValueError("无法找到有效的放置位置")
 
     def _generate_noise_pattern(self, size: int) -> np.ndarray:
-        """生成各种噪声图案"""
+        """生成各种声图案"""
         pattern_type = random.choices(
             list(self.noise_pattern_weights.keys()),
             weights=list(self.noise_pattern_weights.values())
@@ -550,28 +568,49 @@ class ImageAugmentor:
         
         return np.array(img)
 
+    def _get_weighted_folders(self, char_folders: List[str]) -> List[str]:
+        """根据权重获取文件夹列表"""
+        weighted_folders = []
+        weights = []
+        
+        for folder in char_folders:
+            if not os.path.isdir(os.path.join(self.input_dir, folder)):
+                continue
+                
+            weight = 1.0  # 默认权重
+            if folder.isdigit():
+                weight = self.char_weights.get(folder, 1.0)
+            elif folder.startswith('upper_'):
+                weight = self.char_weights.get('upper', 1.0)
+            elif folder.startswith('lower_'):
+                weight = self.char_weights.get('lower', 1.0)
+                
+            weighted_folders.append(folder)
+            weights.append(weight)
+            
+        return weighted_folders, weights
+
     def generate_image(self, input_dir: str) -> Tuple[np.ndarray, List[Tuple]]:
         """生成一张包含多个数字、字母和噪声图案的增强图像"""
-        # 创建空白画布
+        self.input_dir = input_dir  # 保存输入目录
         canvas = np.full((self.canvas_size, self.canvas_size), 255, dtype=np.uint8)
         
         # 随机决定数字和噪声数量
         num_digits = random.randint(self.min_digits, self.max_digits)
         num_noise_patterns = int(num_digits * 0.5)  # 噪声数量为数字数量的一半
         
-        # 准备所有需要放置的项目
-        placement_items = []  # [(type, img, digit, size), ...]
-        
-        # 获取所有可用的字符文件夹
+        placement_items = []
         char_folders = os.listdir(input_dir)
         
+        # 获取带权重的文件夹列表
+        weighted_folders, weights = self._get_weighted_folders(char_folders)
         # 重置字母计数
         self.total_letters = 0
         
         # 准备数字和字母
         for _ in range(num_digits):
-            # 随机选择一个字符文件夹
-            folder = random.choice(char_folders)
+            # 使用权重随机选择文件夹
+            folder = random.choices(weighted_folders, weights=weights, k=1)[0]
             folder_path = os.path.join(input_dir, folder)
             
             if not os.path.isdir(folder_path):
@@ -605,9 +644,20 @@ class ImageAugmentor:
             char_img = self._load_digit(char_path)  # 复用数字加载函数
             char_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
             char_img = self._resize_digit(char_img, char_size)  # 复用数字缩放函数
-            char_img = self._apply_augmentations(char_img)
+            
+            # 根据概率决定是否应用增强
+            if random.random() < self.augmentation_prob:
+                char_img = self._apply_augmentations(char_img)
             
             placement_items.append((char_type, char_img, char_id, char_size))
+            
+            # 更新统计信息
+            if char_type == 'digit':
+                self.char_statistics['digits'][folder] += 1
+            elif char_type == 'upper':
+                self.char_statistics['upper'] += 1
+            elif char_type == 'lower':
+                self.char_statistics['lower'] += 1
         
         # 准备噪声图案
         for _ in range(num_noise_patterns):
@@ -649,6 +699,30 @@ class ImageAugmentor:
         canvas = self._add_industrial_background(canvas)
         
         return canvas, yolo_annotations
+
+    def print_statistics(self):
+        """打印字符统计信息"""
+        print("\n=== 字符生成统计 ===")
+        print("\n数字统计:")
+        for digit, count in self.char_statistics['digits'].items():
+            print(f"数字 {digit}: {count} 次")
+        
+        print("\n字母统计:")
+        print(f"大写字母: {self.char_statistics['upper']} 次")
+        print(f"小写字母: {self.char_statistics['lower']} 次")
+        
+        total_chars = sum(self.char_statistics['digits'].values()) + \
+                     self.char_statistics['upper'] + \
+                     self.char_statistics['lower']
+        print(f"\n总计生成字符: {total_chars} 个")
+
+    def reset_statistics(self):
+        """重置统计信息"""
+        self.char_statistics = {
+            'digits': {str(i): 0 for i in range(10)},
+            'upper': 0,
+            'lower': 0
+        }
 
 def generate_single_image(args):
     """生成单张图像的函数(用于多进程)"""
@@ -706,6 +780,6 @@ if __name__ == "__main__":
     generate_dataset(
         input_dir="font_numbers",
         output_dir="augmented_dataset",
-        num_images=500,
+        num_images=200,
         augmentor=augmentor
     )
