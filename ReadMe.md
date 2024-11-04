@@ -1,5 +1,5 @@
 # IndustrialDigitDatasetGenerator
-
+![合成数据集](docs/images/Multiple_Images_Visualization_RAW.JPG)
 IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字图像数据集的工具。它能够从系统自带字体中提取数字(0-9)，并通过多种数据增强技术生成适用于工业环境的合成数据集，支持YOLO格式的目标检测标注。本工具支持多线程处理，依赖库简单，模块化设计，大量参数引出可供调节，易于使用。
 
 ## 关键词 Keywords
@@ -11,8 +11,8 @@ IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字
 ## 主要功能
 
 ### 字体提取
-- 自动扫描并提取系统中的字体文件(默认支持Windows系统,其他系统修改字体目录即可)
-- 智能过滤不适用的特殊字体
+- 自动扫描并提取系统中的字体文件(默认支持Windows系统和WSL,其他系统修改字体目录即可)
+- 过滤不适用的特殊字体
 - 自动裁剪和对齐数字图像
 
 ### 数据增强
@@ -80,14 +80,18 @@ pip install -r requirements.txt
 
 ## 使用方法
 
+### 0. 下载真实工业背景数据集
+我们使用[NEU-DET](http://faculty.neu.edu.cn/songkechen/zh_CN/zdylm/263270/list/index.htm)数据集作为真实工业背景，请自行下载，并按照[项目结构](#项目结构)放置。
+
 ### 1. 字体提取
 ```bash
 python font_extractor.py
 ```
 从系统中提取数字字体并保存为PNG格式。
+
 Tips：
 - 对于提取出来的字体进行手动查看之后再生成数据集，以防提取出不合适的字体。
-- 如果你知道你所应用的场景是哪一种字体，可以修改`font_extractor.py`中的字体目录，生成指定的字体以提高数据集的精确度。
+- 如果你知道你所应用的场景是哪一种字体，可以修改`default_config.py`中的字体目录，生成指定的字体以提高数据集的精确度。
 
 ### 2. 数据集生成
 ```bash
@@ -95,7 +99,7 @@ python font_png_augmentation.py
 ```
 使用提取的字体生成带有工业背景的数字图像数据集。
 
-### 3. 可视化验证
+### 3. 可视化验证工具
 ```bash
 python visualize_annotations.py
 ```
@@ -111,87 +115,34 @@ python test_digit_augmentation.py
 ```
 可视化测试数字增强效果
 
-## 详细配置参数说明
-
-### 基础配置
-- `canvas_size`: 输出图像的尺寸大小（正方形，默认256×256）
-- `min_digits`/`max_digits`: 每张图像包含的数字数量范围（默认5-15个）
-- `min_scale`/`max_scale`: 数字大小范围（相对于画布尺寸的比例，默认0.05-0.15）
-- `min_spacing`: 数字间最小间距（像素，默认10）
-- `max_placement_attempts`: 数字放置最大尝试次数（默认100）
-
-### 背景配置
-- `background_noise_type`: 背景噪声类型
-  - `perlin`: 柏林噪声，生成连续的、自然的纹理
-  - `simplex`: 单纯形噪声，类似柏林噪声但性能更好
-  - `gaussian`: 高斯噪声，完全随机的噪点
-- `background_noise_intensity`: 背景噪声强度（0.0-1.0，默认0.9）
-- `use_real_background`: 是否使用真实背景图像
-- `real_background_dir`: 真实背景图片目录路径
-
-### 数据增强配置
-- `augmentation_types`: 可选的数据增强类型
-  - `noise`: 添加噪声
-  - `occlusion`: 随机遮挡
-  - `distortion`: 扭曲变形
-  - `aspect_ratio`: 改变长宽比
-  - `rotation`: 旋转
-  - `brightness`: 亮度调节
-
-- `noise_types`: 支持的噪声类型
-  - `gaussian`: 高斯噪声
-  - `salt_pepper`: 椒盐噪声
-  - `speckle`: 斑点噪声
-  - `poisson`: 泊松噪声
-
-- `digit_noise_intensity_range`: 数字噪声强度范围（0.0-1.0）
-- `occlusion_prob`: 遮挡概率（0.0-1.0，默认0.6）
-- `distortion_range`: 扭曲变形范围（默认0.9-1.1）
-- `brightness_range`: 亮度调节范围（默认1.1-1.7）
-
-### 图案干扰配置
-- `noise_patterns`: 支持的图案类型
-  - `circle`: 圆形（实心/空心）
-  - `vertical_stripe`: 竖条纹
-  - `horizontal_stripe`: 横条纹
-  - `rectangle`: 矩形（实心/空心）
-  - `hexagon`: 六边形（实心/空心）
-  - `triangle`: 三角形（实心/空心）
-
-- `noise_pattern_weights`: 各图案生成权重
-  - `circle`: 0.2
-  - `vertical_stripe`: 0.2
-  - `horizontal_stripe`: 0.2
-  - `rectangle`: 0.2
-  - `hexagon`: 0.1
-  - `triangle`: 0.1
-
-### 字母干扰配置
-- `annotate_letters`: 是否为字母生成YOLO标注（默认True）
-- `letter_count`: 单张图片字母出现总数（默认2）
 
 ## 项目结构
 ```
 IndustrialDigitDatasetGenerator/
-|—— NEU-DET                # 真实工业背景图片目录
-|———— IMAGES               # 图片目录
-|—— font_numbers           # 提取的字体图片目录
-|———— 0
-|———— 1
-|———— 2
-|———— 3
-|———— 4
-|———— 5
-|———— 6
-|———— 7
-|———— 8
-|———— 9
-|—— augmented_dataset      # 生成的数据集目录
-|—— font_extractor.py      # 字体提取工具
-|—— font_png_augmentation.py # 数据集生成主程序
-|—— visualize_annotations.py # 标注可视化工具
-|—— requirements.txt         # 参考依赖库列表
-└── README.md
+├── NEU-DET/                 # 真实工业背景图片目录
+│   └── IMAGES/             # 图片目录
+├── font_numbers/           # 提取的字体图片目录
+│   ├── 0/
+│   ├── 1/
+│   ├── 2/
+│   ├── 3/
+│   ├── 4/
+│   ├── 5/
+│   ├── 6/
+│   ├── 7/
+│   ├── 8/
+│   └── 9/                 
+├── augmented_dataset/     # 生成的数据集目录
+├── docs/                  # 文档目录
+│   └── images/           # 文档图片目录
+|—— default_config.py     # 默认配置参数
+├── font_extractor.py      # 字体提取工具
+├── font_png_augmentation.py # 数据集生成主程序
+├── test_digit_augmentation.py # 数字增强测试工具
+├── test_noise_pattern.py    # 噪声图案测试工具
+├── visualize_annotations.py # 标注可视化工具
+├── requirements.txt       # 依赖库列表
+└── README.md             # 项目说明文档
 ```
 
 ## 贡献指南
@@ -210,10 +161,12 @@ IndustrialDigitDatasetGenerator/
 ![数据增强效果](docs/images/single_digit_augmentations_8.JPG)
 
 
-### 图案干扰效果
-![图案干扰效果](docs/images/test_noise_patterns.JPG)
+### 图案干扰样本示意
+![图案干扰示意](docs/images/test_noise_patterns.JPG)
 *不同类型的随机图案干扰示例*
 
 ### YOLO标注可视化
+![标注可视化](docs/images/Multiple_Images_Visualization.JPG)
+
+
 ![标注可视化](docs/images/visualize_yolo_annotations.JPG)
-*YOLO格式标注框可视化效果*

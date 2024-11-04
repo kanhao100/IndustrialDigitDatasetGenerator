@@ -30,7 +30,7 @@ def get_color(class_id: int, digit_colors: np.ndarray) -> Tuple[int, int, int]:
         # 其他字符复用数字的颜色
         return tuple(map(int, digit_colors[class_id % 10]))
 
-def visualize_yolo_annotations(image_path: str, label_path: str):
+def visualize_yolo_annotations(image_path: str, label_path: str, return_image: bool = False):
     """可视化YOLO格式的标注，支持数字和字母"""
     # 读取图像
     img = Image.open(image_path)
@@ -82,26 +82,114 @@ def visualize_yolo_annotations(image_path: str, label_path: str):
         label = get_char_label(class_id)
         
         # 添加标签背景
-        label_w, label_h = draw.textsize(label, font=font)
-        draw.rectangle([x1, y1-label_h-4, x1+label_w+4, y1], 
-                      fill=color)
+        # 使用textbbox获取文本边界框
+        left, top, right, bottom = draw.textbbox((x1, y1), label, font=font)
+        label_w = right - left
+        label_h = bottom - top
+        draw.rectangle([x1, y1-label_h-4, x1+label_w+4, y1], fill=color)
         
         # 添加类别标签
         draw.text((x1+2, y1-label_h-2), label, 
                  fill=(255, 255, 255),  # 白色文字
                  font=font)
     
-    # 显示图像
-    plt.figure(figsize=(12, 12))
-    plt.imshow(vis_img)
+    # 修改显示逻辑
+    if not return_image:
+        plt.figure(figsize=(12, 12))
+        plt.imshow(vis_img)
+        plt.axis('off')
+        plt.title('YOLO Annotations Visualization (Numbers and Letters)')
+        plt.show()
+    return vis_img  # 返回处理后的图像
+
+def visualize_multiple_images(base_pattern: str, start_idx: int, num_images: int = 5):
+    """横向显示多张图片的标注结果
+    Args:
+        base_pattern: 图片路径模式，例如 "./augmented_dataset/image_{:06d}"
+        start_idx: 起始图片索引
+        num_images: 要显示的图片数量
+    """
+    images = []
+    max_height = 0
+    total_width = 0
+    
+    # 处理每张图片
+    for i in range(num_images):
+        idx = start_idx + i
+        image_path = f"{base_pattern.format(idx)}.png"
+        label_path = f"{base_pattern.format(idx)}.txt"
+        
+        if not os.path.exists(image_path) or not os.path.exists(label_path):
+            continue
+            
+        img = visualize_yolo_annotations(image_path, label_path, return_image=True)
+        images.append(img)
+        max_height = max(max_height, img.size[1])
+        total_width += img.size[0]
+    
+    # 创建拼接图片
+    result = Image.new('RGB', (total_width, max_height))
+    current_x = 0
+    
+    # 拼接图片
+    for img in images:
+        result.paste(img, (current_x, 0))
+        current_x += img.size[0]
+    
+    # 显示拼接结果
+    plt.figure(figsize=(20, 4))
+    plt.imshow(result)
     plt.axis('off')
-    plt.title('YOLO Annotations Visualization (Numbers and Letters)')
+    plt.title('Multiple Images Visualization')
+    plt.show()
+
+def visualize_multiple_raw_images(base_pattern: str, start_idx: int, num_images: int = 5):
+    """横向显示多张原始图片（不包含标注）
+    Args:
+        base_pattern: 图片路径模式，例如 "./augmented_dataset/image_{:06d}"
+        start_idx: 起始图片索引
+        num_images: 要显示的图片数量
+    """
+    images = []
+    max_height = 0
+    total_width = 0
+    
+    # 处理每张图片
+    for i in range(num_images):
+        idx = start_idx + i
+        image_path = f"{base_pattern.format(idx)}.png"
+        
+        if not os.path.exists(image_path):
+            continue
+            
+        img = Image.open(image_path).convert('RGB')
+        images.append(img)
+        max_height = max(max_height, img.size[1])
+        total_width += img.size[0]
+    
+    # 创建拼接图片
+    result = Image.new('RGB', (total_width, max_height))
+    current_x = 0
+    
+    # 拼接图片
+    for img in images:
+        result.paste(img, (current_x, 0))
+        current_x += img.size[0]
+    
+    # 显示拼接结果
+    plt.figure(figsize=(20, 4))
+    plt.imshow(result)
+    plt.axis('off')
+    plt.title('Multiple Raw Images Visualization')
     plt.show()
 
 if __name__ == "__main__":
-    # 选择一张图片进行测试
-    base_path = "./augmented_dataset/image_000119"  # 替换为实际的图片基础路径
-    image_path = f"{base_path}.png"  # 图片路径
-    label_path = f"{base_path}.txt"  # 对应的标注文件
+    # 测试两种可视化方式
+    base_pattern = "./augmented_dataset/image_{:06d}"
+    start_idx = 39
     
-    visualize_yolo_annotations(image_path, label_path) 
+    print("显示原始图片：")
+    visualize_multiple_raw_images(base_pattern, start_idx)
+    
+    print("\n显示带标注的图片：")
+    visualize_multiple_images(base_pattern, start_idx)

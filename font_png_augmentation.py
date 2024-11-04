@@ -29,21 +29,27 @@ class ImageAugmentor:
         min_spacing: int = 5,                  # 数字之间的最小间距（像素）
         max_placement_attempts: int = 100,      # 寻找有效放置位置的最大尝试次数
                                           # 超过此次数认为无法放置更多数字
-        use_real_background: bool = False,      # 新增：是否使用真实背景图
-        real_background_dir: str = "./NEU-DET/IMAGES",  # 新增：真实背景图目录
-        augmentation_types: List[str] = None,  # 新增：指定要使用的增强类型
-        noise_types: List[str] = None,  # 新增：指定要使用的噪声类型
-        occlusion_prob: float = 0.3,  # 新增：遮挡概率
-        distortion_range: Tuple[float, float] = (0.8, 1.2),  # 新增：变形范围
-        brightness_range: Tuple[float, float] = (0.7, 1.3),  # 新增：亮度调节范围
+        use_real_background: bool = False,      # 是否使用真实背景图
+        real_background_dir: str = "./NEU-DET/IMAGES",  # 真实背景图目录
+        augmentation_types: List[str] = None,  # 指定要使用的增强类型
+        noise_types: List[str] = None,  # 指定要使用的噪声类型
+        occlusion_prob: float = 0.3,  # 遮挡概率
+        distortion_range: Tuple[float, float] = (0.8, 1.2),  # 变形范围
+        brightness_range: Tuple[float, float] = (0.7, 1.3),  # 亮度调节范围
         noise_patterns: List[str] = None,
         noise_pattern_weights: Dict[str, float] = None,
-        annotate_letters: bool = False,  # 新增：是否为字母生成YOLO标注
+        annotate_letters: bool = False,  # 是否为字母生成YOLO标注
         letter_count: int = 999,  # 字母出现次数限制
-        augmentation_prob: float = 0.7,  # 新增：应用增强的概率
-        char_weights: Dict[str, float] = None,  # 新增：字符权重字典
+        augmentation_prob: float = 0.7,  # 应用增强的概率
+        char_weights: Dict[str, float] = None,  # 字符权重字典
+        seed: int = None,  # 随机种子参数
         
     ):
+        # 设置随机种子
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+        
         self.canvas_size = canvas_size
         self.background_noise_type = background_noise_type
         self.background_noise_intensity = background_noise_intensity
@@ -109,8 +115,8 @@ class ImageAugmentor:
     def _generate_perlin_noise(self, shape: Tuple[int, int]) -> np.ndarray:
         """生成柏林噪声作为工业环境背景"""
         def perlin(x, y, seed=0):
-            # 简化版柏林噪声实现
-            np.random.seed(seed)
+            # 使用类的随机状态而不是固定种子
+            # np.random.seed(seed)  # 删除这行
             p = np.arange(256, dtype=int)
             np.random.shuffle(p)
             p = np.stack([p, p]).flatten()
@@ -726,7 +732,11 @@ class ImageAugmentor:
 
 def generate_single_image(args):
     """生成单张图像的函数(用于多进程)"""
-    i, input_dir, output_dir, augmentor = args
+    i, input_dir, output_dir, augmentor, seed = args
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+    
     image, annotations = augmentor.generate_image(input_dir)
     
     # 保存图像和标签
@@ -742,9 +752,18 @@ def generate_dataset(
     input_dir: str,
     output_dir: str,
     num_images: int,
-    augmentor: ImageAugmentor
+    augmentor: ImageAugmentor,
+    seed: int = None,
 ):
     """生成数据集(多进程版本)"""
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        # 为每个进程生成不同的种子
+        process_seeds = [random.randint(0, 999999) for _ in range(num_images)]
+    else:
+        process_seeds = [None] * num_images
+
     os.makedirs(output_dir, exist_ok=True)
     
     # 获取CPU核心数
@@ -752,8 +771,8 @@ def generate_dataset(
     # 创建进程池
     pool = Pool(processes=num_cores)
     
-    # 准备参数
-    args_list = [(i, input_dir, output_dir, augmentor) for i in range(num_images)]
+    # 准备参数，加入种子
+    args_list = [(i, input_dir, output_dir, augmentor, process_seeds[i]) for i in range(num_images)]
     
     # 使用进度条
     from tqdm import tqdm
@@ -781,5 +800,6 @@ if __name__ == "__main__":
         input_dir="font_numbers",
         output_dir="augmented_dataset",
         num_images=200,
-        augmentor=augmentor
+        augmentor=augmentor,
+        seed=42  # 设置数据集生成的随机种子, 以固定随机状态
     )

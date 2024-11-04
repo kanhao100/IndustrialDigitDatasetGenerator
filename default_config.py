@@ -1,5 +1,6 @@
-# 默认配置参数, 请修改
+# ImageAugmentor类的默认参数配置，请修改
 DEFAULT_CONFIG = {
+        "real_background_dir": "./NEU-DET/IMAGES",  # 真实背景图片目录路径
         "canvas_size": 256,          # 输出图像的尺寸大小，生成 canvas_size x canvas_size 的正方形图像
         "background_noise_type": "perlin",  # 背景噪声类型：
                                            # - 'perlin': 柏林噪声，生成连续的、自然的纹理
@@ -11,7 +12,7 @@ DEFAULT_CONFIG = {
                                                     # 每个数字会随机选择这个范围内的噪声强度
         "min_digits": 10,                   # 每张图像最少数字数量
         "max_digits": 20,                  # 每张图像最多数字数量
-        "min_scale": 0.03,                # 数字最小缩放比例（相对于 canvas_size）
+        "min_scale": 0.04,                # 数字最小缩放比例（相对于 canvas_size）
                                           # 例如：0.04 表示数字最小为画布的 4%
         "max_scale": 0.15,                # 数字最大缩放比例（相对于 canvas_size）
                                           # 例如：0.15 表示数字最大为画布的 15%
@@ -19,7 +20,6 @@ DEFAULT_CONFIG = {
         "max_placement_attempts": 100,      # 寻找有效放置位置的最大尝试次数
                                           # 超过此次数认为无法放置更多数字
         "use_real_background": True,      # 是否使用真实背景图替代生成的噪声背景
-        "real_background_dir": "./NEU-DET/IMAGES",  # 真实背景图片目录路径
         "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','rotation', 'brightness'],  # 启用的数据增强类型：
                                                                      # - 'noise': 添加噪声
                                                                      # - 'occlusion': 随机遮挡
@@ -57,13 +57,13 @@ DEFAULT_CONFIG = {
         # 字符权重
         "char_weights": {
             '0': 1.0,
-            '1': 30.0, 
+            '1': 5.0,  # 数字1的识别难度较大，建议增加其权重
             '2': 1.0,
             '3': 1.0,
             '4': 1.0,
             '5': 1.0,
             '6': 1.0,
-            '7': 1.0,
+            '7': 2.0,
             '8': 1.0,
             '9': 1.0,
             'upper': 1.0,  # 大写字母出现概率
@@ -72,6 +72,7 @@ DEFAULT_CONFIG = {
         "annotate_letters": True,    # 是否为字母生成YOLO标注
         "letter_count": 2,  # 单张图片字母出现总数  
         "augmentation_prob": 0.9,  # 应用增强的概率，使用此参数调小可增加正常的数字的比例
+        "seed": None,  # 单线程的随机种子参数
     }
 
 
