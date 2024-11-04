@@ -354,10 +354,17 @@ class ImageAugmentor:
         # 最后将PIL图像转回numpy数组
         return np.array(img)
 
+    # def _load_digit(self, digit_path: str) -> np.ndarray:
+    #     """加载数字图片"""
+    #     return np.array(Image.open(digit_path).convert('L'))
+        
     def _load_digit(self, digit_path: str) -> np.ndarray:
-        """加载数字图片"""
-        return np.array(Image.open(digit_path).convert('L'))
-
+        """加载数字的-1通道,透明度数据(alpha 通道),并反转黑白"""
+        img = Image.open(digit_path).split()[-1].convert('L')
+        img_array = np.array(img)
+        inverted_array = 255 - img_array
+        return inverted_array
+        
     def _resize_digit(self, img_array: np.ndarray, target_size: int) -> np.ndarray:
         """调整数字图片大小
         Args:
