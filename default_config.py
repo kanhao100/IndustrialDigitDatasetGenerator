@@ -57,13 +57,13 @@ DEFAULT_CONFIG = {
         # 字符权重
         "char_weights": {
             '0': 1.0,
-            '1': 5.0,  # 数字1的识别难度较大，建议增加其权重
+            '1': 3.0,  # 数字1的识别难度较大，建议增加其权重
             '2': 1.0,
             '3': 1.0,
             '4': 1.0,
             '5': 1.0,
             '6': 1.0,
-            '7': 2.0,
+            '7': 1.5,
             '8': 1.0,
             '9': 1.0,
             'upper': 1.0,  # 大写字母出现概率
@@ -101,15 +101,23 @@ if is_wsl():
         '/mnt/c/Program Files (x86)/Microsoft Office/root/vfs/Fonts',
         '/mnt/c/Program Files/Common Files/Microsoft Shared/Fonts',
         '/mnt/c/Program Files (x86)/Common Files/Microsoft Shared/Fonts',
+        '/mnt/c/Program Files (x86)/Microsoft Office/root/vfs/Fonts/private',
     ]
 else:
     # Windows 环境下的字体目录
     FONT_DIRECTORIES = [
         "C:\\Windows\\Fonts",
+        "C:\\Windows\\Boot\\Fonts",
         "C:\\Program Files\\Microsoft Office\\root\\vfs\\Fonts",
         "C:\\Program Files (x86)\\Microsoft Office\\root\\vfs\\Fonts",
         "C:\\Program Files\\Common Files\\Microsoft Shared\\Fonts",
         "C:\\Program Files (x86)\\Common Files\\Microsoft Shared\\Fonts",
+        "C:\\Program Files (x86)\\Microsoft Office\\root\\vfs\\Fonts\\private",
+        "D:\\anaconda3\\Lib\\site-packages\\navigator_updater\\static\\fonts",
+        "D:\\anaconda3\\Lib\\site-packages\\matplotlib\\mpl-data\\fonts\\ttf",
+        "D:\\JetBrains\\PyCharm Community Edition 2023.1.1\\jbr\\lib\\fonts",
+        "C:\\Program Files\\Azure Data Studio\\resources\\app\\extensions\\markdown-math\\notebook-out\\fonts",
+        "D:\\number_pic_dataset_ours\\font_files",
     ]
 
 # 需要排除的字体列表（不区分大小写）
@@ -118,7 +126,15 @@ EXCLUDED_FONTS = {
     'mtextra', 'refspcl', 'segmdl2', 'segoepr', 'segoeprb',
     'segoesc', 'segoescb', 'stcaiyun', 'sthupo', 'symbol',
     'webdings', 'wingding', 'wingdng2', 'BRADHITC', 'ITCKRIST',
-    'MISTRAL', 'mvboli', 'PAPYRUS', 'PRISTINA', 'FREESCPT'
+    'MISTRAL', 'mvboli', 'PAPYRUS', 'PRISTINA', 'FREESCPT',
+    'cmex10', 'cmsy10', 'DejaVuSansDisplay', 'DejaVuSerifDisplay',
+    'KaTeX_AMS-Regular', 'KaTeX_Caligraphic-Bold', 'KaTeX_Caligraphic-Regular',
+    'KaTeX_Script-Regular', 'KaTeX_Size1-Regular', 'KaTeX_Size2-Regular',
+    'KaTeX_Size3-Regular', 'KaTeX_Size4-Regular', 'STIXNonUniBolIta',
+    'STIXNonUniBol', 'STIXNonUniIta', 'STIXNonUni', 'STIXSizFiveSymReg',
+    'STIXSizFourSymReg', 'STIXSizOneSymReg', 'STIXSizThreeSymReg',
+    'STIXSizTwoSymReg', 'chs_boot', 'cht_boot', 'jpn_boot', 'kor_boot', 'wgl4_boot',
+    'Strebd3'
 }
 
 # 需要排除的字体的关键字（部分匹配，不区分大小写）
