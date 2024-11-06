@@ -707,7 +707,7 @@ class ImageAugmentor:
         return canvas, yolo_annotations
 
     def print_statistics(self):
-        """打印字符统计信息"""
+        """打印字符统计信息 | Print character statistics"""
         print("\n=== 字符生成统计 ===")
         print("\n数字统计:")
         for digit, count in self.char_statistics['digits'].items():
@@ -731,7 +731,7 @@ class ImageAugmentor:
         }
 
 def generate_single_image(args):
-    """生成单张图像的函数(用于多进程)"""
+    """生成单张图像的函数(用于多进程) | Function to generate a single image (for multi-process)"""
     i, input_dir, output_dir, augmentor, seed = args
     if seed is not None:
         random.seed(seed)
@@ -755,7 +755,7 @@ def generate_dataset(
     augmentor: ImageAugmentor,
     seed: int = None,
 ):
-    """生成数据集(多进程版本)"""
+    """生成数据集(多进程版本) | Generate dataset (multi-process version)"""
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -790,16 +790,16 @@ def generate_dataset(
     pool.join()
 
 if __name__ == "__main__":
-    # 配置参数
+    # 配置参数 | Configure parameters
     config = DEFAULT_CONFIG.copy()
     
     augmentor = ImageAugmentor(**config)
     
-    # 生成数据集
+    # 生成数据集 | Generate dataset
     generate_dataset(
-        input_dir="font_numbers",
-        output_dir="augmented_dataset",
-        num_images=200,
-        augmentor=augmentor,
-        seed=42  # 设置数据集生成的随机种子, 以固定随机状态
+        input_dir="font_numbers", # 字体文件目录 | Font file directory
+        output_dir="augmented_dataset", # 输出目录 | Output directory
+        num_images=200, # 生成图像数量 | Number of images to generate
+        augmentor=augmentor, 
+        seed=42  # 设置数据集生成的随机种子, 以固定随机状态 | Set the random seed for dataset generation to fix the random state
     )
