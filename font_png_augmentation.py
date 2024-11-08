@@ -2,7 +2,7 @@ import os
 import numpy as np
 from PIL import Image, ImageDraw
 import random
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Union
 from multiprocessing import Pool
 import multiprocessing
 import math
@@ -383,11 +383,27 @@ class ImageAugmentor:
     #     return np.array(Image.open(digit_path).convert('L'))
         
     def _load_digit(self, digit_path: str) -> np.ndarray:
-        """加载数字的-1通道,透明度数据(alpha 通道),并反转黑白"""
+        """加载数字的-1通道,透明度数据(alpha 通道),并根据目录决定是否反转黑白
+        
+        Args:
+            digit_path: 图像文件路径
+            
+        Returns:
+            np.ndarray: 处理后的图像数组
+        """
+        # 解析路径
+        path_parts = os.path.normpath(digit_path).split(os.sep)
+        is_font_numbers = "font_numbers" in path_parts
+        
+        # 加载图像
         img = Image.open(digit_path).split()[-1].convert('L')
         img_array = np.array(img)
-        inverted_array = 255 - img_array
-        return inverted_array
+        
+        # 根据目录决定是否反转
+        if is_font_numbers:
+            img_array = 255 - img_array
+            
+        return img_array
         
     def _resize_digit(self, img_array: np.ndarray, target_size: int) -> np.ndarray:
         """调整数字图片大小
@@ -574,68 +590,70 @@ class ImageAugmentor:
         
         return np.array(img)
 
-    def _get_weighted_folders(self, char_folders: List[str]) -> List[str]:
-        """根据权重获取文件夹列表"""
+    def _get_weighted_folders(self, input_dirs: List[str]) -> Tuple[List[str], List[float]]:
+        """根据权重获取所有目录中的文件夹列表"""
         weighted_folders = []
         weights = []
         
-        for folder in char_folders:
-            if not os.path.isdir(os.path.join(self.input_dir, folder)):
-                continue
+        for input_dir in input_dirs:
+            char_folders = os.listdir(input_dir)
+            for folder in char_folders:
+                folder_path = os.path.join(input_dir, folder)
+                if not os.path.isdir(folder_path):
+                    continue
                 
-            weight = 1.0  # 默认权重
-            if folder.isdigit():
-                weight = self.char_weights.get(folder, 1.0)
-            elif folder.startswith('upper_'):
-                weight = self.char_weights.get('upper', 1.0)
-            elif folder.startswith('lower_'):
-                weight = self.char_weights.get('lower', 1.0)
+                weight = 1.0  # 默认权重
+                if folder.isdigit():
+                    weight = self.char_weights.get(folder, 1.0)
+                elif folder.startswith('upper_'):
+                    weight = self.char_weights.get('upper', 1.0)
+                elif folder.startswith('lower_'):
+                    weight = self.char_weights.get('lower', 1.0)
+                    
+                weighted_folders.append(folder_path)  # 存储完整路径
+                weights.append(weight)
                 
-            weighted_folders.append(folder)
-            weights.append(weight)
-            
         return weighted_folders, weights
 
-    def generate_image(self, input_dir: str) -> Tuple[np.ndarray, List[Tuple]]:
+    def generate_image(self, input_dirs: Union[str, List[str]]) -> Tuple[np.ndarray, List[Tuple]]:
         """生成一张包含多个数字、字母和噪声图案的增强图像"""
-        self.input_dir = input_dir  # 保存输入目录
+        if isinstance(input_dirs, str):
+            input_dirs = [input_dirs]
+        
         canvas = np.full((self.canvas_size, self.canvas_size), 255, dtype=np.uint8)
         
         # 随机决定数字和噪声数量
         num_digits = random.randint(self.min_digits, self.max_digits)
-        num_noise_patterns = int(num_digits * 0.5)  # 噪声数量为数字数量的一半
+        num_noise_patterns = int(num_digits * 0.5)
         
         placement_items = []
-        char_folders = os.listdir(input_dir)
         
-        # 获取带权重的文件夹列表
-        weighted_folders, weights = self._get_weighted_folders(char_folders)
+        # 获取所有目录中的带权重的文件夹列表
+        weighted_folders, weights = self._get_weighted_folders(input_dirs)
+        
         # 重置字母计数
         self.total_letters = 0
         
         # 准备数字和字母
         for _ in range(num_digits):
             # 使用权重随机选择文件夹
-            folder = random.choices(weighted_folders, weights=weights, k=1)[0]
-            folder_path = os.path.join(input_dir, folder)
+            folder_path = random.choices(weighted_folders, weights=weights, k=1)[0]
+            folder_name = os.path.basename(folder_path)
             
-            if not os.path.isdir(folder_path):
-                continue
-                
             # 确定字符类型和标识
-            if folder.isdigit():  # 数字文件夹
+            if folder_name.isdigit():  # 数字文件夹
                 char_type = 'digit'
-                char_id = int(folder)
-            elif (folder.startswith('upper_') or folder.startswith('lower_')):  # 字母
-                if self.total_letters >= self.letter_count:  # 如果已经有2个字母，跳过
+                char_id = int(folder_name)
+            elif (folder_name.startswith('upper_') or folder_name.startswith('lower_')):  # 字母
+                if self.total_letters >= self.letter_count:
                     continue
                 
-                if folder.startswith('upper_'):
+                if folder_name.startswith('upper_'):
                     char_type = 'upper'
-                    char_id = ord(folder[6:]) - ord('A') + 10
+                    char_id = ord(folder_name[6:]) - ord('A') + 10
                 else:  # lower_
                     char_type = 'lower'
-                    char_id = ord(folder[6:]) - ord('a') + 36
+                    char_id = ord(folder_name[6:]) - ord('a') + 36
                     
                 self.total_letters += 1
             else:
@@ -646,12 +664,11 @@ class ImageAugmentor:
             char_file = random.choice(char_files)
             char_path = os.path.join(folder_path, char_file)
             
-            # 加载和调整字符大小
-            char_img = self._load_digit(char_path)  # 复用数字加载函数
+            # 加载和处理字符图像
+            char_img = self._load_digit(char_path)
             char_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
-            char_img = self._resize_digit(char_img, char_size)  # 复用数字缩放函数
+            char_img = self._resize_digit(char_img, char_size)
             
-            # 根据概率决定是否应用增强
             if random.random() < self.augmentation_prob:
                 char_img = self._apply_augmentations(char_img)
             
@@ -659,7 +676,7 @@ class ImageAugmentor:
             
             # 更新统计信息
             if char_type == 'digit':
-                self.char_statistics['digits'][folder] += 1
+                self.char_statistics['digits'][str(char_id)] += 1
             elif char_type == 'upper':
                 self.char_statistics['upper'] += 1
             elif char_type == 'lower':
@@ -732,12 +749,13 @@ class ImageAugmentor:
 
 def generate_single_image(args):
     """生成单张图像的函数(用于多进程) | Function to generate a single image (for multi-process)"""
-    i, input_dir, output_dir, augmentor, seed = args
+    i, input_dirs, output_dir, augmentor, seed = args
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
     
-    image, annotations = augmentor.generate_image(input_dir)
+    # 将所有输入目录传递给generate_image
+    image, annotations = augmentor.generate_image(input_dirs)
     
     # 保存图像和标签
     image_path = os.path.join(output_dir, f"image_{i:06d}.png")
@@ -748,14 +766,22 @@ def generate_single_image(args):
         for ann in annotations:
             f.write(f"{ann[0]} {ann[1]:.6f} {ann[2]:.6f} {ann[3]:.6f} {ann[4]:.6f}\n")
 
-def generate_dataset(
-    input_dir: str,
+def generate_dataset( 
+    input_dirs: Union[str, List[str]],
     output_dir: str,
     num_images: int,
     augmentor: ImageAugmentor,
     seed: int = None,
 ):
-    """生成数据集(多进程版本) | Generate dataset (multi-process version)"""
+    """生成数据集(多进程版本) | Generate dataset (multi-process version)
+    
+    Args:
+        input_dirs: 字体文件目录或目录列表，将同时使用所有目录中的字体
+        output_dir: 输出目录
+        num_images: 生成图像数量
+        augmentor: 数据增强器实例
+        seed: 随机种子
+    """
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -763,6 +789,15 @@ def generate_dataset(
         process_seeds = [random.randint(0, 999999) for _ in range(num_images)]
     else:
         process_seeds = [None] * num_images
+
+    # 确保input_dirs是列表格式
+    if isinstance(input_dirs, str):
+        input_dirs = [input_dirs]
+
+    # 验证所有输入目录是否存在
+    for input_dir in input_dirs:
+        if not os.path.exists(input_dir):
+            raise ValueError(f"输入目录不存在: {input_dir}")
 
     os.makedirs(output_dir, exist_ok=True)
     
@@ -777,6 +812,7 @@ def generate_dataset(
     # 使用进度条
     from tqdm import tqdm
     print(f"使用 {num_cores} 个进程生成数据集...")
+    print(f"输入目录: {input_dirs}")
     
     # 使用进程池映射任务
     list(tqdm(
@@ -797,7 +833,7 @@ if __name__ == "__main__":
     
     # 生成数据集 | Generate dataset
     generate_dataset(
-        input_dir="font_numbers", # 字体文件目录 | Font file directory
+        input_dirs=["font_numbers", "template_num"], # 字体文件目录 | Font file directory
         output_dir="augmented_dataset", # 输出目录 | Output directory
         num_images=200, # 生成图像数量 | Number of images to generate
         augmentor=augmentor, 
