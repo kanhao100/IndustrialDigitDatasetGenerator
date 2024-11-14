@@ -9,6 +9,20 @@ IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字
 
  **Industrial Digital Image**、**Industrial Instrument Detection**、**Instrument Automation**、**Dial Reading Recognition**、**Industrial Instrument Reading Recognition**、**Data Augmentation**、**Object Detection**、**YOLO Annotation**、**Font Extraction**、**Caliper Reading**
 
+## TODO List
+
+- [ ] 添加自定义背景以及可供放置的区域
+- [ ] 添加自定义干扰图案库
+- [ ] 添加数字1紧凑处理
+- [ ] 添加形态学处理
+- [ ] 添加数字放到背景图像中，添加图像融合
+- [ ] 衬线和无衬线字体的区分
+- [ ] **bug**: png图像中的颜色数据（CData）和透明度数据（AlphaData）
+- [x] 添加自定义字库进入
+- [x] 字体提取添加更多路径，添加linux支持
+- [x] 添加种子抑制随机
+- [x] **bug**: pillow库版本问题，目前至少一个textsize兼容问题
+- [x] 添加字体提取部分的提示，说明提取了多少种
 
 ## 主要功能
 
