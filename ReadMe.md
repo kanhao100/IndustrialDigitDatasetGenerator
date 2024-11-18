@@ -11,14 +11,14 @@ IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字
 
 ## TODO List
 
-- [ ] 添加自定义背景以及可供放置的区域
-- [ ] 添加自定义干扰图案库
-- [ ] 添加数字1紧凑处理
+- [ ] 添加自定义背景以及可供放置的区域🔴🔴🔴
+- [x] 添加自定义字库
+- [x] 添加自定义干扰图案库
+- [ ] 添加数字1紧凑处理🔴🔴
 - [ ] 添加形态学处理
-- [ ] 添加数字放到背景图像中，添加图像融合
+- [ ] 添加数字放到背景图像中，添加图像融合🔴
 - [ ] 衬线和无衬线字体的区分
 - [ ] **bug**: png图像中的颜色数据（CData）和透明度数据（AlphaData）
-- [x] 添加自定义字库进入
 - [x] 字体提取添加更多路径，添加linux支持
 - [x] 添加种子抑制随机
 - [x] **bug**: pillow库版本问题，目前至少一个textsize兼容问题
@@ -148,10 +148,13 @@ IndustrialDigitDatasetGenerator/
 │   ├── 7/
 │   ├── 8/
 │   └── 9/                 
-├── augmented_dataset/     # 生成的数据集目录
+├── augmented_dataset/      # 生成的数据集目录
+├── custom_background/   # 自定义背景图片目录
+├── custom_noise_patterns/ # 自定义干扰图案目录
+├── template_num/          # 自定义字体目录
 ├── docs/                  # 文档目录
 │   └── images/           # 文档图片目录
-|—— default_config.py     # 默认配置参数
+|—— default_config.py      # 默认配置参数
 ├── font_extractor.py      # 字体提取工具
 ├── font_png_augmentation.py # 数据集生成主程序
 ├── test_digit_augmentation.py # 数字增强测试工具

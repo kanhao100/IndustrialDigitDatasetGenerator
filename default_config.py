@@ -63,6 +63,9 @@ DEFAULT_CONFIG = {
         "letter_count": 2,  # 单张图片字母出现总数 | Total number of letters per image
         "augmentation_prob": 0.9,  # 应用增强的概率 | Probability of applying augmentation
         "seed": None,  # 单线程的随机种子参数 | Random seed for single-threaded execution
+        "custom_noise_dir": "./custom_noise_patterns",  # 自定义干扰图案目录 | Custom noise pattern directory
+        "custom_noise_weight": 0,  # 自定义干扰图案的权重 | Custom noise pattern weight
+        "generated_noise_weight": 1,  # 生成的干扰图案的权重 | Generated noise pattern weight 
     }
 
 

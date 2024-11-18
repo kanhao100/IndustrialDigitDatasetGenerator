@@ -43,6 +43,9 @@ class ImageAugmentor:
         augmentation_prob: float = 0.7,  # 应用增强的概率
         char_weights: Dict[str, float] = None,  # 字符权重字典
         seed: int = None,  # 随机种子参数
+        custom_noise_dir: str = None,  # 自定义干扰图案目录
+        custom_noise_weight: float = 0.3,  # 自定义干扰图案的权重
+        generated_noise_weight: float = 0.7,  # 生成的干扰图案的权重
         
     ):
         # 设置随机种子
@@ -101,8 +104,8 @@ class ImageAugmentor:
         if use_real_background:
             self.real_background_files = [
                 f for f in os.listdir(real_background_dir) 
-                if f.endswith('.jpg') and not f.startswith('patches') 
-                # 对于NEU-DET数据集，只使用jpg格式的背景图, 且排除掉patches开头的文件，因为遮挡过于严重
+                if (f.endswith('.jpg') or f.endswith('.bmp')) and not f.startswith('patches') 
+                # 对于NEU-DET数据集，只使用jpg和bmp格式的背景图, 且排除掉patches开头的文件，因为遮挡过于严重
             ]
         
         # 添加统计字典
@@ -112,6 +115,22 @@ class ImageAugmentor:
             'lower': 0
         }
         
+        self.custom_noise_dir = custom_noise_dir
+        self.custom_noise_weight = custom_noise_weight
+        self.generated_noise_weight = generated_noise_weight
+        
+        # 验证自定义干扰图案目录
+        if custom_noise_dir and not os.path.exists(custom_noise_dir):
+            raise ValueError(f"自定义干扰图案目录不存在: {custom_noise_dir}")
+        
+        # 如果提供了自定义干扰图案目录，获取所有图片文件
+        self.custom_noise_files = []
+        if custom_noise_dir:
+            self.custom_noise_files = [
+                f for f in os.listdir(custom_noise_dir)
+                if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))
+            ]
+
     def _generate_perlin_noise(self, shape: Tuple[int, int]) -> np.ndarray:
         """生成柏林噪声作为工业环境背景"""
         def perlin(x, y, seed=0):
@@ -157,12 +176,22 @@ class ImageAugmentor:
             bg_path = os.path.join(self.real_background_dir, bg_file)
             
             # 读取并调整背景图大小
-            bg_img = Image.open(bg_path).convert('L')
+            bg_img = Image.open(bg_path)
+            # 检查图像模式,如果是1位图(黑白二值图)则先转为RGB再转灰度
+            if bg_img.mode == '1':
+                bg_img = bg_img.convert('RGB').convert('L')
+            else:
+                bg_img = bg_img.convert('L')
             bg_img = bg_img.resize((self.canvas_size, self.canvas_size), Image.LANCZOS)
             bg_array = np.array(bg_img)
             
+            # 检查并修正背景图的黑白关系
+            # 如果背景主要是黑色(均值<128),则反转图像
+            if np.mean(bg_array) < 228:
+                bg_array = 255 - bg_array
+            
             # 将背景图的亮度调整到合适范围
-            bg_array = np.clip(bg_array * self.background_noise_intensity, 0, 255).astype(np.uint8)
+            # bg_array = np.clip(bg_array * self.background_noise_intensity, 0, 255).astype(np.uint8)
             
             # 将原图叠加到背景上
             return np.clip(image.astype(float) - bg_array, 0, 255).astype(np.uint8)
@@ -438,7 +467,7 @@ class ImageAugmentor:
         return final_img
 
     def _get_bounding_box(self, digit_img: np.ndarray) -> Tuple[int, int, int, int]:
-        """获取数图像中非空白像素的边界框
+        """获取数字图像中非空白像素的边界框
         返回：(min_x, min_y, width, height)
         """
         # 因为是灰度图，背景是255（白色），我们找出非255的像素
@@ -615,6 +644,37 @@ class ImageAugmentor:
                 
         return weighted_folders, weights
 
+    def _load_custom_noise_pattern(self, size: int) -> np.ndarray:
+        """加载自定义干扰图案
+        
+        Args:
+            size: 目标尺寸
+            
+        Returns:
+            np.ndarray: 处理后的干扰图案数组
+        """
+        if not self.custom_noise_files:
+            raise ValueError("没有可用的自定义干扰图案")
+        
+        # 随机选择一个图案文件
+        noise_file = random.choice(self.custom_noise_files)
+        noise_path = os.path.join(self.custom_noise_dir, noise_file)
+        
+        # 加载图像并转换为灰度图
+        noise_img = Image.open(noise_path).convert('L')
+        
+        # 调整大小
+        noise_img = noise_img.resize((size, size), Image.LANCZOS)
+        
+        # 转换为numpy数组
+        noise_array = np.array(noise_img)
+        
+        # 确保黑白对比度
+        # 将非白色区域（灰度值>200）转为白色，其他区域转为黑色
+        noise_array = np.where(noise_array > 200, 255, 0)
+        
+        return noise_array
+
     def generate_image(self, input_dirs: Union[str, List[str]]) -> Tuple[np.ndarray, List[Tuple]]:
         """生成一张包含多个数字、字母和噪声图案的增强图像"""
         if isinstance(input_dirs, str):
@@ -685,9 +745,19 @@ class ImageAugmentor:
         # 准备噪声图案
         for _ in range(num_noise_patterns):
             noise_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale*3))
-            noise_img = self._generate_noise_pattern(noise_size)
-            noise_img = self._apply_augmentations(noise_img)
             
+            # 根据权重决定使用哪种噪声图案
+            if (self.custom_noise_dir and self.custom_noise_files and 
+                random.random() < self.custom_noise_weight / (self.custom_noise_weight + self.generated_noise_weight)):
+                try:
+                    noise_img = self._load_custom_noise_pattern(noise_size)
+                except Exception as e:
+                    print(f"加载自定义噪声图案失败: {e}")
+                    noise_img = self._generate_noise_pattern(noise_size)
+            else:
+                noise_img = self._generate_noise_pattern(noise_size)
+            
+            noise_img = self._apply_augmentations(noise_img)
             placement_items.append(('noise', noise_img, None, noise_size))
         
         # 随机打乱放置顺序
@@ -833,7 +903,7 @@ if __name__ == "__main__":
     
     # 生成数据集 | Generate dataset
     generate_dataset(
-        input_dirs=["font_numbers", "template_num"], # 字体文件目录 | Font file directory
+        input_dirs=["font_numbers","template_num"], # 字体文件目录 | Font file directory
         output_dir="augmented_dataset", # 输出目录 | Output directory
         num_images=200, # 生成图像数量 | Number of images to generate
         augmentor=augmentor, 

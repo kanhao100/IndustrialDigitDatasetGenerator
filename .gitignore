@@ -1,3 +1,8 @@
 /augmented_dataset
 /font_numbers
 /NEU-DET
+/__pycache__
+/custom_noise_patterns
+/custom_background
+/template_num
+*.zip
