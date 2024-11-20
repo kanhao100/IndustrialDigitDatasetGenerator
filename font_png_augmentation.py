@@ -6,6 +6,7 @@ from typing import Tuple, List, Dict, Union
 from multiprocessing import Pool
 import multiprocessing
 import math
+from tqdm import tqdm
 
 from default_config import DEFAULT_CONFIG
 
@@ -46,6 +47,9 @@ class ImageAugmentor:
         custom_noise_dir: str = None,  # 自定义干扰图案目录
         custom_noise_weight: float = 0.3,  # 自定义干扰图案的权重
         generated_noise_weight: float = 0.7,  # 生成的干扰图案的权重
+        custom_background_dir: str = None,  # 自定义背景图目录
+        custom_background_label_dir: str = None,  # 自定义背景图标注目录
+        use_custom_background: bool = False,  # 是否使用自定义背景
         
     ):
         # 设置随机种子
@@ -128,6 +132,23 @@ class ImageAugmentor:
         if custom_noise_dir:
             self.custom_noise_files = [
                 f for f in os.listdir(custom_noise_dir)
+                if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))
+            ]
+        
+        self.custom_background_dir = custom_background_dir
+        self.custom_background_label_dir = custom_background_label_dir
+        self.use_custom_background = use_custom_background
+        
+        # 验证自定义背景目录
+        if use_custom_background:
+            if not custom_background_dir or not os.path.exists(custom_background_dir):
+                raise ValueError(f"自定义背景图目录不存在: {custom_background_dir}")
+            if not custom_background_label_dir or not os.path.exists(custom_background_label_dir):
+                raise ValueError(f"自定义背景图标注目录不存在: {custom_background_label_dir}")
+            
+            # 获取背景图文件列表
+            self.custom_background_files = [
+                f for f in os.listdir(custom_background_dir)
                 if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))
             ]
 
@@ -462,6 +483,7 @@ class ImageAugmentor:
         
         # 直接将裁剪后的图像调整到目标大小，不保持宽高比
         resized_img = Image.fromarray(img_array).resize((target_size, target_size), Image.LANCZOS)
+        # resized_img = Image.fromarray(img_array).resize((target_size, target_size))
         final_img = np.array(resized_img)
         
         return final_img
@@ -675,6 +697,90 @@ class ImageAugmentor:
         
         return noise_array
 
+    def _load_custom_background(self) -> Tuple[np.ndarray, List[List[float]]]:
+        """加载自定义背景图和对应的标注信息
+        
+        Returns:
+            Tuple[np.ndarray, List[List[float]]]: (背景图数组, 可放置区域列表)
+            可放置区域格式: [[x_center, y_center, width, height], ...]
+        """
+        # 随机选择一张背景图
+        bg_file = random.choice(self.custom_background_files)
+        bg_name = os.path.splitext(bg_file)[0]
+        
+        # 读取背景图
+        bg_path = os.path.join(self.custom_background_dir, bg_file)
+        bg_img = Image.open(bg_path)
+        if bg_img.mode == '1':
+            bg_img = bg_img.convert('RGB').convert('L')
+        else:
+            bg_img = bg_img.convert('L')
+        
+        # 调整大小
+        bg_img = bg_img.resize((self.canvas_size, self.canvas_size), Image.LANCZOS)
+        bg_array = np.array(bg_img)
+        
+        # 读取对应的标注文件
+        label_path = os.path.join(self.custom_background_label_dir, f"{bg_name}.txt")
+        placement_areas = []
+        
+        if os.path.exists(label_path):
+            with open(label_path, 'r') as f:
+                for line in f:
+                    # 假设标注格式为YOLO格式：class x_center y_center width height
+                    parts = line.strip().split()
+                    if len(parts) == 5:
+                        # 只需要位置信息，不需要类别信息
+                        placement_areas.append([float(x) for x in parts[1:]])
+        
+        return bg_array, placement_areas
+
+    def _find_valid_position_in_area(
+        self, 
+        item_size: int, 
+        placement_area: List[float],
+        occupied_positions: List[Tuple]
+    ) -> Tuple[int, int]:
+        """在指定区域内找到有效的放置位置
+        
+        Args:
+            item_size: 要放置的项目大小
+            placement_area: [x_center, y_center, width, height] (归一化坐标)
+            occupied_positions: 已占用的位置列表
+        
+        Returns:
+            Tuple[int, int]: (x, y) 像素坐标
+        """
+        # 将归一化坐标转换为像素坐标
+        area_x = int(placement_area[0] * self.canvas_size)
+        area_y = int(placement_area[1] * self.canvas_size)
+        area_w = int(placement_area[2] * self.canvas_size)
+        area_h = int(placement_area[3] * self.canvas_size)
+        
+        # 计算可放置的区域范围
+        x_min = max(0, area_x - area_w//2)
+        x_max = min(self.canvas_size - item_size, area_x + area_w//2)
+        y_min = max(0, area_y - area_h//2)
+        y_max = min(self.canvas_size - item_size, area_y + area_h//2)
+        
+        max_attempts = self.max_placement_attempts
+        for _ in range(max_attempts):
+            x = random.randint(x_min, x_max)
+            y = random.randint(y_min, y_max)
+            
+            # 检查是否与已有项目重叠
+            valid = True
+            for ox, oy, other_img in occupied_positions:
+                if (abs(x - ox) < item_size + self.min_spacing and
+                    abs(y - oy) < item_size + self.min_spacing):
+                    valid = False
+                    break
+            
+            if valid:
+                return x, y
+                
+        raise ValueError("无法在指定区域内找到有效的放置位置")
+
     def generate_image(self, input_dirs: Union[str, List[str]]) -> Tuple[np.ndarray, List[Tuple]]:
         """生成一张包含多个数字、字母和噪声图案的增强图像"""
         if isinstance(input_dirs, str):
@@ -728,9 +834,21 @@ class ImageAugmentor:
             char_img = self._load_digit(char_path)
             char_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale))
             char_img = self._resize_digit(char_img, char_size)
+
+
+            # 创建临时目录来保存字符图像
+            tmp_dir = os.path.join(os.path.abspath(os.sep), "tmp")
+            os.makedirs(tmp_dir, exist_ok=True)
+            # 生成临时文件名
+            tmp_filename = f"char_{random.randint(0,10000)}.png"
+            tmp_path = os.path.join(tmp_dir, tmp_filename)
+            # 保存字符图像
+            Image.fromarray(char_img).save(tmp_path)
             
-            if random.random() < self.augmentation_prob:
-                char_img = self._apply_augmentations(char_img)
+
+            
+            # if random.random() < self.augmentation_prob:
+            #     char_img = self._apply_augmentations(char_img)
             
             placement_items.append((char_type, char_img, char_id, char_size))
             
@@ -743,22 +861,22 @@ class ImageAugmentor:
                 self.char_statistics['lower'] += 1
         
         # 准备噪声图案
-        for _ in range(num_noise_patterns):
-            noise_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale*3))
+        # for _ in range(num_noise_patterns):
+        #     noise_size = int(self.canvas_size * random.uniform(self.min_scale, self.max_scale*3))
             
-            # 根据权重决定使用哪种噪声图案
-            if (self.custom_noise_dir and self.custom_noise_files and 
-                random.random() < self.custom_noise_weight / (self.custom_noise_weight + self.generated_noise_weight)):
-                try:
-                    noise_img = self._load_custom_noise_pattern(noise_size)
-                except Exception as e:
-                    print(f"加载自定义噪声图案失败: {e}")
-                    noise_img = self._generate_noise_pattern(noise_size)
-            else:
-                noise_img = self._generate_noise_pattern(noise_size)
+        #     # 根据权重决定使用哪种噪声图案
+        #     if (self.custom_noise_dir and self.custom_noise_files and 
+        #         random.random() < self.custom_noise_weight / (self.custom_noise_weight + self.generated_noise_weight)):
+        #         try:
+        #             noise_img = self._load_custom_noise_pattern(noise_size)
+        #         except Exception as e:
+        #             print(f"加载自定义噪声图案失败: {e}")
+        #             noise_img = self._generate_noise_pattern(noise_size)
+        #     else:
+        #         noise_img = self._generate_noise_pattern(noise_size)
             
-            noise_img = self._apply_augmentations(noise_img)
-            placement_items.append(('noise', noise_img, None, noise_size))
+        #     noise_img = self._apply_augmentations(noise_img)
+        #     placement_items.append(('noise', noise_img, None, noise_size))
         
         # 随机打乱放置顺序
         random.shuffle(placement_items)
@@ -767,12 +885,28 @@ class ImageAugmentor:
         occupied_positions = []
         yolo_annotations = []
         
+        # 获取背景和可放置区域
+        canvas = np.full((self.canvas_size, self.canvas_size), 255, dtype=np.uint8)
+        placement_areas = []
+        is_custom_bg = False  # 添加标志位记录是否使用了自定义背景
+        
+        if self.use_custom_background:
+            canvas, placement_areas = self._load_custom_background()
+            is_custom_bg = True  # 设置标志位
+        
         # 放置所有项目
         for item_type, img, char_id, size in placement_items:
             try:
-                x, y = self._find_valid_position(canvas, img, occupied_positions)
+                if self.use_custom_background and placement_areas:
+                    # 随机选择一个可放置区域
+                    area = random.choice(placement_areas)
+                    x, y = self._find_valid_position_in_area(size, area, occupied_positions)
+                else:
+                    x, y = self._find_valid_position(canvas, img, occupied_positions)
+                
                 # 只复制非白色像素
-                mask = img < 255
+                # 0 黑色  -->  255 白色
+                mask = img < 50
                 canvas[y:y+size, x:x+size][mask] = img[mask]
                 occupied_positions.append((x, y, img))
                 
@@ -789,7 +923,8 @@ class ImageAugmentor:
                 continue  # 如果找不到有效位置，跳过当前项目
         
         # 添加工业环境背景噪声
-        canvas = self._add_industrial_background(canvas)
+        if not is_custom_bg:  # 只在没有使用自定义背景时添加背景噪声
+            canvas = self._add_industrial_background(canvas)
         
         return canvas, yolo_annotations
 
@@ -880,7 +1015,6 @@ def generate_dataset(
     args_list = [(i, input_dir, output_dir, augmentor, process_seeds[i]) for i in range(num_images)]
     
     # 使用进度条
-    from tqdm import tqdm
     print(f"使用 {num_cores} 个进程生成数据集...")
     print(f"输入目录: {input_dirs}")
     
@@ -903,7 +1037,7 @@ if __name__ == "__main__":
     
     # 生成数据集 | Generate dataset
     generate_dataset(
-        input_dirs=["font_numbers","template_num"], # 字体文件目录 | Font file directory
+        input_dirs=["font_numbers"], # 字体文件目录 | Font file directory
         output_dir="augmented_dataset", # 输出目录 | Output directory
         num_images=200, # 生成图像数量 | Number of images to generate
         augmentor=augmentor, 

@@ -27,7 +27,7 @@ def trim_image(image):
 def extract_chars_from_ttf(ttf_path: str, 
                          output_base_dir: str,
                          chars_to_extract: List[str] = None,
-                         font_size: int = 48,
+                         font_size: int = 64,
                          image_size: Tuple[int, int] = (64, 64),
                          text_color: Tuple[int, int, int] = (0, 0, 0)) -> bool:
     """从TTF文件中提取指定字符

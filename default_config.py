@@ -1,7 +1,7 @@
 # ImageAugmentor类的默认参数配置，请修改 | Default parameters for ImageAugmentor class, please modify
 DEFAULT_CONFIG = {
-        "real_background_dir": "./NEU-DET/IMAGES",  # 真实背景图片目录路径 | Path to real background images directory
-        "canvas_size": 256,          # 输出图像的尺寸大小，生成 canvas_size x canvas_size 的正方形图像 | Output image size (square)
+        "real_background_dir": "./custom_background/IMAGES",  # 真实背景图片目录路径 | Path to real background images directory
+        "canvas_size": 600,          # 输出图像的尺寸大小，生成 canvas_size x canvas_size 的正方形图像 | Output image size (square)
         "background_noise_type": "perlin",  # 背景噪声类型 | Background noise type: perlin/simplex/gaussian
                                             # - 'perlin': 柏林噪声，生成连续的、自然的纹理
                                             # - 'simplex': 单纯形噪声，类似柏林噪声但性能更好
@@ -10,12 +10,12 @@ DEFAULT_CONFIG = {
         "digit_noise_intensity_range": (0.0, 0.1),  # 数字噪声强度范围，范围 0.0-1.0 | Digit noise intensity range
         "min_digits": 10,                   # 每张图像最少数字数量 | Minimum number of digits per image
         "max_digits": 20,                  # 每张图像最多数字数量 | Maximum number of digits per image
-        "min_scale": 0.04,                # 数字最小缩放比例 | Minimum digit scale relative to canvas
-        "max_scale": 0.15,                # 数字最大缩放比例 | Maximum digit scale relative to canvas
-        "min_spacing": 10,                  # 数字之间的最小间距（像素）| Minimum spacing between digits (pixels)
+        "min_scale": 0.03,                # 数字最小缩放比例 | Minimum digit scale relative to canvas
+        "max_scale": 0.12,                # 数字最大缩放比例 | Maximum digit scale relative to canvas
+        "min_spacing": 5,                  # 数字之间的最小间距（像素）| Minimum spacing between digits (pixels)
         "max_placement_attempts": 100,      # 寻找有效放置位置的最大尝试次数 | Maximum attempts to place a digit
         "use_real_background": True,      # 是否使用真实背景图替代生成的噪声背景 | Whether to use real background images
-        "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','rotation', 'brightness'],  # 启用的数据增强类型 | Enabled augmentation types
+        "augmentation_types": ['noise' ,'occlusion','rotation','aspect_ratio','rotation'],  # 启用的数据增强类型 | Enabled augmentation types
                                                                             # - 'noise': 添加噪声
                                                                             # - 'occlusion': 随机遮挡
                                                                             # - 'distortion': 扭曲变形
@@ -30,20 +30,29 @@ DEFAULT_CONFIG = {
         "occlusion_prob": 0.7,  # 应用遮挡增强的概率 | Probability of applying occlusion augmentation
         "distortion_range": (0.9, 1.1),  # 扭曲变形的范围 (小于1:压缩 大于1:拉伸) | Distortion range (<1: compress, >1: stretch)
         "brightness_range": (1.1, 1.7),  # 亮度调节的范围 (小于1:变暗 大于1:变亮) | Brightness adjustment range (<1: darker, >1: brighter)
-        "noise_patterns": ['circle', 'vertical_stripe', 'horizontal_stripe', 'rectangle', 'hexagon', 'triangle'],  # 启用的噪声图案类型 | Enabled noise pattern types
+        # "noise_patterns": ['circle', 'vertical_stripe', 'horizontal_stripe', 'rectangle', 'hexagon', 'triangle'],  # 启用的噪声图案类型 | Enabled noise pattern types
+        "noise_patterns": [],
                                             # - 'circle': 圆形（实心/空心）
                                             # - 'vertical_stripe': 竖条纹
                                             # - 'horizontal_stripe': 横条纹
                                             # - 'rectangle': 矩形（实心/空心）
                                             # - 'hexagon': 六边形（实心/空心）
                                             # - 'triangle': 三角形（实心/空心）
+        # "noise_pattern_weights": {       # 各种噪声图案的生成权重 | Generation weights for noise patterns
+        #     'circle': 0.2,              # 圆形的生成概率 | Probability for circle pattern
+        #     'vertical_stripe': 0.1,     # 竖条纹的生成概率 | Probability for vertical stripe pattern
+        #     'horizontal_stripe': 0.2,   # 横条纹的生成概率 | Probability for horizontal stripe pattern
+        #     'rectangle': 0.2,          # 矩形的生成概率 | Probability for rectangle pattern
+        #     'hexagon': 0.1,              # 六边形的生成概率 | Probability for hexagon pattern
+        #     'triangle': 0.2              # 三角形的生成概率 | Probability for triangle pattern
+        # },
         "noise_pattern_weights": {       # 各种噪声图案的生成权重 | Generation weights for noise patterns
-            'circle': 0.2,              # 圆形的生成概率 | Probability for circle pattern
-            'vertical_stripe': 0.1,     # 竖条纹的生成概率 | Probability for vertical stripe pattern
-            'horizontal_stripe': 0.2,   # 横条纹的生成概率 | Probability for horizontal stripe pattern
-            'rectangle': 0.2,          # 矩形的生成概率 | Probability for rectangle pattern
-            'hexagon': 0.1,              # 六边形的生成概率 | Probability for hexagon pattern
-            'triangle': 0.2              # 三角形的生成概率 | Probability for triangle pattern
+            'circle': 0.0,              # 圆形的生成概率 | Probability for circle pattern
+            'vertical_stripe': 0.0,     # 竖条纹的生成概率 | Probability for vertical stripe pattern
+            'horizontal_stripe': 0.0,   # 横条纹的生成概率 | Probability for horizontal stripe pattern
+            'rectangle': 0.0,          # 矩形的生成概率 | Probability for rectangle pattern
+            'hexagon': 0.0,              # 六边形的生成概率 | Probability for hexagon pattern
+            'triangle': 0.1              # 三角形的生成概率 | Probability for triangle pattern
         },
         "char_weights": {               # 字符权重 | Character weights
             '0': 1.0,
@@ -65,7 +74,10 @@ DEFAULT_CONFIG = {
         "seed": None,  # 单线程的随机种子参数 | Random seed for single-threaded execution
         "custom_noise_dir": "./custom_noise_patterns",  # 自定义干扰图案目录 | Custom noise pattern directory
         "custom_noise_weight": 0,  # 自定义干扰图案的权重 | Custom noise pattern weight
-        "generated_noise_weight": 1,  # 生成的干扰图案的权重 | Generated noise pattern weight 
+        "generated_noise_weight": 1,  # 生成的干扰图案的权重 | Generated noise pattern weight
+        "custom_background_dir": "./custom_background/IMAGES",  # 自定义背景图目录 | Custom background image directory  
+        "custom_background_label_dir": "./custom_background/labels",  # 自定义背景图标注目录 | Custom background image label directory
+        "use_custom_background": True,  # 是否使用自定义背景 | Whether to use custom background
     }
 
 
