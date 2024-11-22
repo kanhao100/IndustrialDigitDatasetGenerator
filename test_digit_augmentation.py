@@ -57,7 +57,7 @@ def test_single_digit_augmentations():
     augmentor = ImageAugmentor(**config)
     
     # 选择一个数字进行详细测试
-    test_digit = 1 
+    test_digit = 8
     input_dir = "font_numbers"
     digit_dir = os.path.join(input_dir, str(test_digit))
     digit_files = os.listdir(digit_dir)
@@ -87,8 +87,8 @@ def test_single_digit_augmentations():
     plt.show()
 
 if __name__ == "__main__":
-    # 测试所有数字的增强效果
-    # test_digit_augmentation()
+    # 测试所有数字的增强效果 | Test all digit enhancement effects
+    test_digit_augmentation()
     
-    # 测试单个数字的多种增强效果
-    test_single_digit_augmentations() 
+    # 测试单个数字的多种增强效果 | Test multiple enhancement effects for a single digit
+    # test_single_digit_augmentations() 

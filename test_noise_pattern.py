@@ -67,8 +67,8 @@ def test_mixed_patterns():
     plt.show()
 
 if __name__ == "__main__":
-    # 测试每种类型的多个样本
+    # 测试每种类型的多个样本 | Test multiple samples of each type
     test_noise_patterns()
     
-    # 测试随机混合的图案
+    # 测试随机混合的图案 | Test randomly mixed patterns 
     # test_mixed_patterns() 

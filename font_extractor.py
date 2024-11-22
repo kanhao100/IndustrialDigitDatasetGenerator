@@ -156,13 +156,13 @@ def main():
     for font_name, font_files in WINDOWS_FONTS.items():
         # 检查字体名是否在排除列表中
         if should_exclude_font(font_name):
-            print(f"跳过排除的字体: {font_name}")
+            print(f"Skipping excluded font: {font_name}")
             continue
             
         for font_file in font_files:
             # 检查文件名是否在排除列表中
             if should_exclude_font(os.path.splitext(font_file)[0]):
-                print(f"跳过排除的字体文件: {font_file}")
+                print(f"Skipping excluded font file: {font_file}")
                 continue
                 
             # 在所有字体目录中查找字体文件
@@ -170,37 +170,39 @@ def main():
             for fonts_dir in FONT_DIRECTORIES:
                 font_path = os.path.join(fonts_dir, font_file)
                 if os.path.exists(font_path):
-                    print(f"正在处理预定义字体: {font_name} - {font_file}")
+                    print(f"Processing predefined font: {font_name} - {font_file}")
                     if extract_chars_from_ttf(font_path, OUTPUT_BASE_DIR, DEFAULT_CHARS):
                         processed_count += 1
                     found = True
                     break
             if not found:
-                print(f"未找到预定义字体文件: {font_file}")
+                # print(f"未找到预定义字体文件: {font_file}")
+                print(f"Font file not found: {font_file}")
     
     # 扫描所有字体目录中的其他字体文件
     processed_files = set()
     for fonts_dir in FONT_DIRECTORIES:
         if os.path.exists(fonts_dir):
-            print(f"\n扫描目录: {fonts_dir}")
+            print(f"\nScanning directory: {fonts_dir}")
             additional_fonts = scan_font_directory(fonts_dir)
             
             for font_name, font_path in additional_fonts:
                 # 检查是否应该排除该字体
                 if should_exclude_font(font_name):
-                    print(f"跳过排除的字体: {font_name}")
+                    print(f"Skipping excluded font: {font_name}")
                     continue
                     
                 # 检查是否已处理过该文件
                 if font_path.lower() not in processed_files:
-                    print(f"正在处理额外字体: {font_name}")
+                    print(f"Processing additional font: {font_name}")
                     if extract_chars_from_ttf(font_path, OUTPUT_BASE_DIR, DEFAULT_CHARS):
                         processed_count += 1
                     processed_files.add(font_path.lower())
         else:
-            print(f"目录不存在: {fonts_dir}")
+            print(f"Directory does not exist: {fonts_dir}")
     
-    print(f"\n处理完成！成功处理了 {processed_count} 个字体文件")
+    # print(f"\n处理完成！成功处理了 {processed_count} 个字体文件")
+    print(f"\nProcessing completed! Successfully processed {processed_count} font files")
 
 if __name__ == "__main__":
     main() 
