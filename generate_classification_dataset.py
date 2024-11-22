@@ -49,6 +49,8 @@ def generate_single_digit_image(
     if random.random() < augmentor.augmentation_prob:
         digit_img = augmentor._apply_augmentations(digit_img)
     
+    digit_img = augmentor._add_random_cropped_background(digit_img)
+
     return digit_img
     # # 创建画布
     # canvas = np.full((output_size, output_size), 255, dtype=np.uint8)
@@ -67,24 +69,34 @@ def generate_single_digit_image(
     # return canvas
 
 def generate_classification_dataset(
-    src_dir: str,
+    input_dirs: Union[str, List[str]],
     output_dir: str,
     images_per_class: int,
     augmentor: ImageAugmentor,
-    seed: int = None
+    seed: int = None,
+    dir_weights: List[float] = None
 ):
     """生成用于分类的数据集
     
     Args:
-        src_dir: 源字体目录
+        input_dirs: 源字体目录或目录列表
         output_dir: 输出目录
         images_per_class: 每个类别生成的图像数量
         augmentor: 图像增强器实例
         seed: 随机种子
+        dir_weights: 每个输入目录的权重
     """
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
+    
+    # 确保input_dirs是列表格式
+    if isinstance(input_dirs, str):
+        input_dirs = [input_dirs]
+    
+    # 如果没有提供权重，则默认每个目录的权重相同
+    if dir_weights is None:
+        dir_weights = [1.0] * len(input_dirs)
     
     # 创建输出目录
     os.makedirs(output_dir, exist_ok=True)
@@ -95,15 +107,16 @@ def generate_classification_dataset(
         os.makedirs(digit_dir, exist_ok=True)
     
     # 获取每个数字的所有字体图像
-    digit_files = {}
-    for digit in range(10):
-        digit_path = os.path.join(src_dir, str(digit))
-        if os.path.exists(digit_path):
-            digit_files[str(digit)] = [
-                os.path.join(digit_path, f) 
-                for f in os.listdir(digit_path) 
-                if f.endswith(('.png', '.jpg', '.jpeg'))
-            ]
+    digit_files = {str(digit): [] for digit in range(10)}
+    for input_dir in input_dirs:
+        for digit in range(10):
+            digit_path = os.path.join(input_dir, str(digit))
+            if os.path.exists(digit_path):
+                digit_files[str(digit)].extend([
+                    os.path.join(digit_path, f) 
+                    for f in os.listdir(digit_path) 
+                    if f.endswith(('.png', '.jpg', '.jpeg'))
+                ])
     
     # 生成数据集
     print("开始生成分类数据集...")
@@ -112,10 +125,28 @@ def generate_classification_dataset(
         output_digit_dir = os.path.join(output_dir, digit)
         
         for i in tqdm(range(images_per_class), desc=f"数字 {digit}"):
-            # 随机选择一个字体文件
-            digit_file = random.choice(files)
+            # 确保文件列表不为空
+            if not files:
+                print(f"警告: 没有找到数字 {digit} 的字体文件")
+                continue
             
-            # 生成增强图像
+            # 根据目录权重随机选择一个字体文件
+            selected_dir = random.choices(input_dirs, weights=dir_weights, k=1)[0]
+            digit_path = os.path.join(selected_dir, str(digit))
+            digit_files_in_dir = [
+                os.path.join(digit_path, f) 
+                for f in os.listdir(digit_path) 
+                if f.endswith(('.png', '.jpg', '.jpeg', '.bmp'))
+            ]
+            
+            # 确保目录中有文件
+            if not digit_files_in_dir:
+                print(f"警告: 目录 {digit_path} 中没有找到字体文件")
+                continue
+            
+            digit_file = random.choice(digit_files_in_dir)
+            
+            # 生成增强
             image = generate_single_digit_image(digit_file, augmentor)
             
             # 保存图像
@@ -124,12 +155,8 @@ def generate_classification_dataset(
 
 def main():
     # 源目录和目标目录
-    src_dir = "font_numbers"
-    work_dir = "classification_dataset_work"
+    input_dirs = ["font_numbers", "template_num"]
     output_dir = "classification_dataset"
-    
-    # 复制字体目录
-    # copy_font_directory(src_dir, work_dir)
     
     # 创建增强器实例
     config = DEFAULT_CONFIG.copy()
@@ -137,11 +164,12 @@ def main():
     
     # 生成数据集
     generate_classification_dataset(
-        src_dir=src_dir,
+        input_dirs=input_dirs,
         output_dir=output_dir,
-        images_per_class=1500,  # 每个数字生成1000张图像
+        images_per_class=150,  # 每个数字生成100张图像
         augmentor=augmentor,
-        seed=42
+        seed=42,
+        dir_weights=[0.8, 0.2]  # 设置目录权重
     )
     
     # 清理工作目录
@@ -149,4 +177,4 @@ def main():
     # print("\n数据集生成完成！")
 
 if __name__ == "__main__":
-    main() 
+    main()

@@ -193,6 +193,14 @@ class ImageAugmentor:
             # 将背景图的亮度调整到合适范围
             # bg_array = np.clip(bg_array * self.background_noise_intensity, 0, 255).astype(np.uint8)
             
+            # 判断背景图的亮度
+            brightness_factor = 2  # 亮度调整因子，可以根据需要调整
+            if np.mean(cropped_bg) < 120:
+                # print("背景图较暗，亮度调整因子为2")
+                cropped_bg = np.clip(cropped_bg / brightness_factor, 0, 255).astype(np.uint8)
+            else:
+                pass
+
             # 将原图叠加到背景上
             return np.clip(image.astype(float) - bg_array, 0, 255).astype(np.uint8)
         else:
@@ -218,6 +226,60 @@ class ImageAugmentor:
                         noise[y, x] = max(noise[y, x], intensity)
 
             return np.clip(image.astype(float) - noise, 0, 255).astype(np.uint8)
+
+    def _add_random_cropped_background(self, image: np.ndarray) -> np.ndarray:
+        """添加随机裁切的背景"""
+        if self.use_real_background and self.real_background_files:
+            # 随机选择一张背景图
+            bg_file = random.choice(self.real_background_files)
+            bg_path = os.path.join(self.real_background_dir, bg_file)
+            
+            # 读取背景图
+            bg_img = Image.open(bg_path)
+            # 检查图像模式,如果是1位图(黑白二值图)则先转为RGB再转灰度
+            if bg_img.mode == '1':
+                bg_img = bg_img.convert('RGB').convert('L')
+            else:
+                bg_img = bg_img.convert('L')
+            
+            bg_array = np.array(bg_img)
+            
+            # 检查并修正背景图的黑白关系
+            # 如果背景主要是黑色(均值<128),则反转图像
+            if np.mean(bg_array) < 128:
+                bg_array = 255 - bg_array
+            
+            # 获取数字图像的大小
+            digit_height, digit_width = image.shape
+            
+            # 如果数字图像比背景图大，调整背景图大小
+            if digit_height > bg_array.shape[0] or digit_width > bg_array.shape[1]:
+                scale_factor = max(digit_height / bg_array.shape[0], digit_width / bg_array.shape[1])
+                new_size = (int(bg_array.shape[1] * scale_factor), int(bg_array.shape[0] * scale_factor))
+                bg_img = bg_img.resize(new_size, Image.LANCZOS)
+                bg_array = np.array(bg_img)
+            
+            # 随机裁切背景图
+            max_y = bg_array.shape[0] - digit_height
+            max_x = bg_array.shape[1] - digit_width
+            start_y = random.randint(0, max_y)
+            start_x = random.randint(0, max_x)
+            cropped_bg = bg_array[start_y:start_y + digit_height, start_x:start_x + digit_width]
+
+            # 将背景图的亮度调整到合适范围
+            # 判断背景图的亮度
+            brightness_factor = 2  # 亮度调整因子，可以根据需要调整
+            if np.mean(cropped_bg) < 120:
+                # print("背景图较暗，亮度调整因子为2")
+                cropped_bg = np.clip(cropped_bg / brightness_factor, 0, 255).astype(np.uint8)
+            else:
+                pass
+
+            # 将原图叠加到背景上
+            return np.clip(image.astype(float) - cropped_bg, 0, 255).astype(np.uint8)
+        else:
+            # 如果没有使用真实背景，返回原图
+            return image
 
     def _add_digit_noise(self, digit_img: np.ndarray) -> np.ndarray:
         """为单个数字添加噪声，随机选择一种噪声类型"""
@@ -377,7 +439,7 @@ class ImageAugmentor:
             
             elif aug_type == 'rotation':
                 # 随机旋转
-                angle = random.uniform(-15, 15)
+                angle = random.uniform(-10, 10)
                 img = img.rotate(angle, Image.BICUBIC, expand=False, fillcolor=255)
             
             elif aug_type == 'brightness':
@@ -423,14 +485,20 @@ class ImageAugmentor:
         # 解析路径
         path_parts = os.path.normpath(digit_path).split(os.sep)
         is_font_numbers = "font_numbers" in path_parts
-        
+        # print(path_parts)
         # 加载图像
         img = Image.open(digit_path).split()[-1].convert('L')
         img_array = np.array(img)
         
         # 根据目录决定是否反转
-        # if is_font_numbers:
-        #     img_array = 255 - img_array
+        if is_font_numbers:
+            if os.name == 'nt':  # Windows环境
+                img_array = 255 - img_array
+                # print("反转黑白")
+        else:
+            if os.name == 'posix':  # POSIX环境
+                img_array = 255 - img_array
+                # print("反转黑白")
 
         img_array = 255 - img_array
 
