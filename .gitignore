@@ -1,3 +1,13 @@
 /augmented_dataset
+/augmented_dataset_val
 /font_numbers
+/font_numbers_old
 /NEU-DET
+/__pycache__
+/custom_noise_patterns
+/custom_background
+/template_num
+*.zip
+*.png
+*.cache
+/classification_dataset
