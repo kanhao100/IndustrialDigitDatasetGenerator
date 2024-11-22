@@ -429,9 +429,11 @@ class ImageAugmentor:
         img_array = np.array(img)
         
         # 根据目录决定是否反转
-        if is_font_numbers:
-            img_array = 255 - img_array
-            
+        # if is_font_numbers:
+        #     img_array = 255 - img_array
+
+        img_array = 255 - img_array
+
         return img_array
         
     def _resize_digit(self, img_array: np.ndarray, target_size: int) -> np.ndarray:
