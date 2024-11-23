@@ -11,3 +11,6 @@
 *.png
 *.cache
 /classification_dataset
+*bmp
+*jpg
+*.pth

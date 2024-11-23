@@ -23,10 +23,34 @@ def copy_font_directory(src_dir: str, dest_dir: str):
     shutil.copytree(src_dir, dest_dir)
     print(f"已复制字体目录从 {src_dir} 到 {dest_dir}")
 
+def add_stripe_interference_position(output_size: int) -> (int, int, int, int):
+        """添加竖条条纹干扰位置
+        
+        Args:
+            output_size: 输出图像大小
+            
+        Returns:
+            rect_y: 矩形的y坐标
+            rect_x: 矩形的x坐标
+            rect_height: 矩形高度
+            rect_width: 矩形宽度
+        """
+        rect_height = random.randint(10, 60)  # 矩形高度
+        rect_width = random.randint(5, 20)  # 矩形宽度
+        rect_color = random.randint(0, 30)  # 使用深色/黑色系，0-50的灰度值
+        if random.random() < 0.5:
+            rect_y = 0
+            rect_x = random.randint(0, output_size - rect_width)
+        else:
+            rect_y = output_size - rect_height
+            rect_x = random.randint(0, output_size - rect_width)
+        return rect_y, rect_x, rect_height, rect_width, rect_color
+
+
 def generate_single_digit_image(
     digit_path: str,
     augmentor: ImageAugmentor,
-    output_size: int = 256
+    output_size: int = 224
 ) -> np.ndarray:
     """生成包含单个数字的增强图像
     
@@ -49,24 +73,42 @@ def generate_single_digit_image(
     if random.random() < augmentor.augmentation_prob:
         digit_img = augmentor._apply_augmentations(digit_img)
     
-    digit_img = augmentor._add_random_cropped_background(digit_img)
 
-    return digit_img
-    # # 创建画布
-    # canvas = np.full((output_size, output_size), 255, dtype=np.uint8)
+    if random.random() < 0.7:
+        digit_img = augmentor._add_random_cropped_background(digit_img)
+        return digit_img
     
-    # # 计算居中位置
-    # x = (output_size - digit_size) // 2
-    # y = (output_size - digit_size) // 2
-    
-    # # 将数字放置在画布中心
+    # 创建画布
+    canvas = np.full((output_size, output_size), 255, dtype=np.uint8)
+    # 计算居中位置
+    x = (output_size - digit_size) // 2
+    y = (output_size - digit_size) // 2
+    # 将数字放置在画布中心
     # mask = digit_img < 255
-    # canvas[y:y+digit_size, x:x+digit_size][mask] = digit_img[mask]
-    
+    canvas[y:y+digit_size, x:x+digit_size] = digit_img
     # 添加工业背景
-    # canvas = augmentor._add_industrial_background(canvas)
+    canvas = augmentor._add_random_cropped_background(canvas)
+    if random.random() < 0.7:
+        return canvas
+
+    rect_y, rect_x, rect_height, rect_width, rect_color = add_stripe_interference_position(output_size)
+    canvas[rect_y:rect_y+rect_height, rect_x:rect_x+rect_width] = rect_color
+    if random.random() < 0.25:
+        return canvas
+       
+    rect_y, rect_x, rect_height, rect_width, rect_color = add_stripe_interference_position(output_size)
+    canvas[rect_y:rect_y+rect_height, rect_x:rect_x+rect_width] = rect_color
+    if random.random() < 0.5:
+        return canvas
     
-    # return canvas
+    rect_y, rect_x, rect_height, rect_width, rect_color = add_stripe_interference_position(output_size)
+    canvas[rect_y:rect_y+rect_height, rect_x:rect_x+rect_width] = rect_color
+    if random.random() < 0.5:
+        return canvas
+    
+    rect_y, rect_x, rect_height, rect_width, rect_color = add_stripe_interference_position(output_size)
+    canvas[rect_y:rect_y+rect_height, rect_x:rect_x+rect_width] = rect_color
+    return canvas
 
 def generate_classification_dataset(
     input_dirs: Union[str, List[str]],
@@ -166,7 +208,7 @@ def main():
     generate_classification_dataset(
         input_dirs=input_dirs,
         output_dir=output_dir,
-        images_per_class=150,  # 每个数字生成100张图像
+        images_per_class=2000,  # 每个数字生成100张图像
         augmentor=augmentor,
         seed=42,
         dir_weights=[0.8, 0.2]  # 设置目录权重
