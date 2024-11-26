@@ -1,16 +1,17 @@
 # IndustrialDigitDatasetGenerator
 ![合成数据集](docs/images/Multiple_Images_Visualization_RAW.JPG)
-IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字图像数据集的工具。它能够从系统自带字体中提取数字(0-9)，并通过多种数据增强技术生成适用于工业环境的合成数据集，支持YOLO格式的目标检测标注。本工具支持多线程处理，依赖库简单，模块化设计，大量参数引出可供调节，易于使用。
+IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字图像数据集的工具。它能够从系统自带字体中提取数字(0-9)，并通过多种数据增强技术生成适用于工业环境的合成数据集，支持YOLO格式的目标检测标注，同时也支持单独的数字图像分类数据集的生成。本工具支持多线程处理，依赖库简单，模块化设计，大量参数引出可供调节，易于使用。
 
 [English Version](README_EN.md)
 
 ## 关键词 Keywords
- **工业数字图像**、**工业仪表检测**、**仪表自动化**、**仪表盘读数识别**、**工业仪表读数识别**、**数据增强**、**目标检测**、**YOLO标注**、 **字体提取** 、**游标卡尺自动读数**
+ **工业数字图像**、**工业仪表检测**、**仪表自动化**、**仪表盘读数识别**、**工业仪表读数识别**、**数据增强**、**目标检测**、**YOLO标注**、 **字体提取** 、**游标卡尺自动读数**、**图像分类**
 
- **Industrial Digital Image**、**Industrial Instrument Detection**、**Instrument Automation**、**Dial Reading Recognition**、**Industrial Instrument Reading Recognition**、**Data Augmentation**、**Object Detection**、**YOLO Annotation**、**Font Extraction**、**Caliper Reading**
+ **Industrial Digital Image**、**Industrial Instrument Detection**、**Instrument Automation**、**Dial Reading Recognition**、**Industrial Instrument Reading Recognition**、**Data Augmentation**、**Object Detection**、**YOLO Annotation**、**Font Extraction**、**Caliper Reading**、 **Image Classification**
 
 ## TODO List
 
+- [x] 添加单独的小图，以生成可用以图像分类任务的数据集
 - [ ] 添加自定义背景以及可供放置的区域🔴🔴🔴
 - [x] 添加自定义字库
 - [x] 添加自定义干扰图案库
@@ -70,6 +71,7 @@ IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字
 
 ### 标注生成
 - 自动生成YOLO格式标注,包含边界框和类别信息
+- 自动生成图像分类数据集，使用文件夹名字作为标注信息
 
 ## 安装要求
 
@@ -148,7 +150,8 @@ IndustrialDigitDatasetGenerator/
 │   ├── 7/
 │   ├── 8/
 │   └── 9/                 
-├── augmented_dataset/      # 生成的数据集目录
+├── augmented_dataset/      # 生成的定位与检测数据集目录
+├── classification_dataset/      # 生成的图像分类的数据集目录
 ├── custom_background/   # 自定义背景图片目录
 ├── custom_noise_patterns/ # 自定义干扰图案目录
 ├── template_num/          # 自定义字体目录
@@ -156,7 +159,8 @@ IndustrialDigitDatasetGenerator/
 │   └── images/           # 文档图片目录
 |—— default_config.py      # 默认配置参数
 ├── font_extractor.py      # 字体提取工具
-├── font_png_augmentation.py # 数据集生成主程序
+├── font_png_augmentation.py # 目标检测数据集生成主程序
+├── generate_classification_dataset.py # 图像分类数据集生成主程序
 ├── test_digit_augmentation.py # 数字增强测试工具
 ├── test_noise_pattern.py    # 噪声图案测试工具
 ├── visualize_annotations.py # 标注可视化工具
@@ -189,3 +193,6 @@ IndustrialDigitDatasetGenerator/
 
 
 ![标注可视化](docs/images/visualize_yolo_annotations.JPG)
+
+### 下游任务结果示例
+![下游游标卡尺数字检测效果](docs/images/result.JPG)

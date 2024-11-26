@@ -5,7 +5,7 @@
 IndustrialDigitDatasetGenerator is a tool specifically designed for generating digital image datasets in industrial scenarios. It can extract digits (0-9) from system fonts and generate synthetic datasets suitable for industrial environments through various data augmentation techniques, supporting YOLO format object detection annotations. This tool supports multithreading, has simple dependencies, a modular design, and many adjustable parameters, making it easy to use.
 
 ## Keywords
-**Industrial Digital Image**, **Industrial Instrument Detection**, **Instrument Automation**, **Dial Reading Recognition**, **Industrial Instrument Reading Recognition**, **Data Augmentation**, **Object Detection**, **YOLO Annotation**, **Font Extraction**, **Caliper Reading**
+**Industrial Digital Image**, **Industrial Instrument Detection**, **Instrument Automation**, **Dial Reading Recognition**, **Industrial Instrument Reading Recognition**, **Data Augmentation**, **Object Detection**, **YOLO Annotation**, **Font Extraction**, **Caliper Reading**、 **Image Classification**
 
 ## Main Features
 
