@@ -1,7 +1,7 @@
 # IndustrialDigitDatasetGenerator
 <!-- ![合成数据集](docs/images/Multiple_Images_Visualization_RAW.JPG) -->
-![合成数据集](docs/main1.JPG)
-IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字图像数据集的工具。它能够从系统自带字体中提取数字(0-9)，并通过多种数据增强技术生成适用于工业环境的合成数据集，支持YOLO格式的目标检测标注，同时也支持单独的数字图像分类数据集的生成。本工具支持多线程处理，依赖库简单，模块化设计，大量参数引出可供调节，易于使用。
+![模式说明](docs/images/main1.JPG)
+IndustrialDigitDatasetGenerator 是一个专门用于生成工业场景下数字图像数据集的工具。它能够从系统自带字体中提取数字(0-9)，并通过多种数据增强技术生成适用于工业环境的合成数据集。我们提供3种模式，(a)使用一般工业背景生成支持YOLO格式的目标检测标注的数据集，(b)使用一般实际应用场景的自定义背景生成支持YOLO格式的目标检测标注的数据集，(c)使用一般工业背景生成图像分类标注的数据集。本工具支持多线程处理，依赖库简单，模块化设计，大量参数引出可供调节，易于使用。
 
 [English Version](README_EN.md)
 
